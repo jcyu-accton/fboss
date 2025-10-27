@@ -79,6 +79,10 @@ void PlatformProductInfo::initMode() {
     } else if (
         modelName.find("Wedge400") == 0 || modelName.find("WEDGE400") == 0) {
       type_ = PlatformType::PLATFORM_WEDGE400;
+    } else if (modelName.find("WEDGE800B_ACT") == 0) {
+      type_ = PlatformType::PLATFORM_WEDGE800B_ACT;
+    } else if (modelName.find("WEDGE800C_ACT") == 0) {
+      type_ = PlatformType::PLATFORM_WEDGE800C_ACT;
     } else if (modelName.find("DARWIN48V") == 0) {
       type_ = PlatformType::PLATFORM_DARWIN48V;
     } else if (
@@ -190,12 +194,8 @@ void PlatformProductInfo::initMode() {
       type_ = PlatformType::PLATFORM_TAHAN800BC;
     } else if (modelName.find("ICECUBE") == 0) {
       type_ = PlatformType::PLATFORM_ICECUBE800BC;
-    } else if (modelName.find("WEDGE800B_ACT") == 0) {
-      type_ = PlatformType::PLATFORM_WEDGE800B_ACT;
     } else if (modelName.find("ICETEA") == 0) {
       type_ = PlatformType::PLATFORM_ICETEA800BC;
-    } else if (modelName.find("WEDGE800C_ACT") == 0) {
-      type_ = PlatformType::PLATFORM_WEDGE800C_ACT;
     } else {
       throw FbossError("invalid model name " + modelName);
     }
