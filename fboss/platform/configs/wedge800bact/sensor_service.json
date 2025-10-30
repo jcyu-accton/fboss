@@ -1309,7 +1309,7 @@
       ]
     },
     {
-      "slotPath": "/RUNBMC_SLOT@0",
+      "slotPath": "/SCM_SLOT@0/RUNBMC_SLOT@0",
       "pmUnitName": "BMC",
       "sensors": [
         {
