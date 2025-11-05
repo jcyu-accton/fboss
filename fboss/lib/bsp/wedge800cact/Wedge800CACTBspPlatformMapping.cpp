@@ -1569,13 +1569,13 @@ constexpr auto kJsonBspPlatformMappingStr = R"(
         "67": {
           "id": 67,
           "bluePath": "/sys/class/leds/port23_led3:blue:status",
-          "yellowPath": "/sys/class/leds/port23_led1:amber:status",
+          "yellowPath": "/sys/class/leds/port23_led3:amber:status",
           "transceiverId": 23
         },
         "68": {
           "id": 68,
           "bluePath": "/sys/class/leds/port23_led4:blue:status",
-          "yellowPath": "/sys/class/leds/port23_led2:amber:status",
+          "yellowPath": "/sys/class/leds/port23_led4:amber:status",
           "transceiverId": 23
         },
         "69": {

@@ -1,0 +1,2285 @@
+diff --git a/cmake/LedService.cmake b/cmake/LedService.cmake
+index 3e0549fb45b8a..bd761b5e34e6f 100644
+--- a/cmake/LedService.cmake
++++ b/cmake/LedService.cmake
+@@ -71,6 +71,7 @@ add_library(led_manager_lib
+   fboss/led_service/Janga800bicLedManager.cpp
+   fboss/led_service/Tahan800bcLedManager.cpp
+   fboss/led_service/Tahansb800bcLedManager.cpp
++  fboss/led_service/Wedge800CACTLedManager.cpp
+ )
+ 
+ target_link_libraries(led_manager_lib
+@@ -105,6 +106,7 @@ target_link_libraries(led_manager_lib
+   tahan800bc_platform_mapping
+   tahansb800bc_platform_mapping
+   wedge400_platform_mapping
++  wedge800cact_platform_mapping
+   yamp_platform_mapping
+   product_info
+   Folly::folly
+diff --git a/cmake/QsfpService.cmake b/cmake/QsfpService.cmake
+index 2ee65dc490058..83ee36f402175 100644
+--- a/cmake/QsfpService.cmake
++++ b/cmake/QsfpService.cmake
+@@ -173,6 +173,15 @@ target_link_libraries(tahansb800bc_bsp
+   FBThrift::thriftcpp2
+ )
+ 
++add_library(wedge800cact_bsp
++  fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.cpp
++)
++
++target_link_libraries(wedge800cact_bsp
++  bsp_platform_mapping_cpp2
++  FBThrift::thriftcpp2
++)
++
+ add_library(qsfp_bsp_core
+   fboss/lib/bsp/BspGenericSystemContainer.cpp
+   fboss/lib/bsp/BspIOBus.cpp
+@@ -208,6 +217,7 @@ target_link_libraries(qsfp_bsp_core
+   janga800bic_bsp
+   tahan800bc_bsp
+   tahansb800bc_bsp
++  wedge800cact_bsp
+   device_mdio
+   fpga_device
+   phy_management_base
+diff --git a/cmake/QsfpServicePlatformsWedge.cmake b/cmake/QsfpServicePlatformsWedge.cmake
+index 9963306383039..37858e55c88cf 100644
+--- a/cmake/QsfpServicePlatformsWedge.cmake
++++ b/cmake/QsfpServicePlatformsWedge.cmake
+@@ -38,6 +38,7 @@ target_link_libraries(qsfp_platforms_wedge
+   icecube800bc_platform_mapping
+   icetea800bc_platform_mapping
+   tahansb800bc_platform_mapping
++  wedge800cact_platform_mapping
+   platform_base
+   qsfp_config
+   wedge400_i2c
+diff --git a/fboss/led_service/LedManagerInit.cpp b/fboss/led_service/LedManagerInit.cpp
+index 6bd26faf64d7d..0a2933494681f 100644
+--- a/fboss/led_service/LedManagerInit.cpp
++++ b/fboss/led_service/LedManagerInit.cpp
+@@ -16,6 +16,7 @@
+ #include "fboss/led_service/Tahan800bcLedManager.h"
+ #include "fboss/led_service/Tahansb800bcLedManager.h"
+ #include "fboss/led_service/Wedge400LedManager.h"
++#include "fboss/led_service/Wedge800CACTLedManager.h"
+ #include "fboss/led_service/YampLedManager.h"
+ #include "fboss/lib/platforms/PlatformProductInfo.h"
+ 
+@@ -71,6 +72,8 @@ std::unique_ptr<LedManager> createLedManager() {
+     return std::make_unique<Icetea800bcLedManager>();
+   } else if (mode == PlatformType::PLATFORM_TAHANSB800BC) {
+     return std::make_unique<Tahansb800bcLedManager>();
++  } else if (mode == PlatformType::PLATFORM_WEDGE800CACT) {
++    return std::make_unique<Wedge800CACTLedManager>();
+   }
+   return nullptr;
+ }
+diff --git a/fboss/led_service/Wedge800CACTLedManager.cpp b/fboss/led_service/Wedge800CACTLedManager.cpp
+new file mode 100644
+index 0000000000000..80f0eb386e3c2
+--- /dev/null
++++ b/fboss/led_service/Wedge800CACTLedManager.cpp
+@@ -0,0 +1,21 @@
++// (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
++
++#include "fboss/led_service/Wedge800CACTLedManager.h"
++#include "fboss/agent/platforms/common/wedge800cact/Wedge800CACTPlatformMapping.h"
++#include "fboss/lib/bsp/BspGenericSystemContainer.h"
++#include "fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.h"
++
++namespace facebook::fboss {
++
++/*
++ * Wedge800CACTLedManager ctor()
++ *
++ * Wedge800CACTLedManager constructor will create the LedManager object for
++ * Wedge800CACT platform
++ */
++Wedge800CACTLedManager::Wedge800CACTLedManager() : BspLedManager() {
++  init<Wedge800CACTBspPlatformMapping, Wedge800CACTPlatformMapping>();
++  XLOG(INFO) << "Created Wedge800CACT BSP LED Manager";
++}
++
++} // namespace facebook::fboss
+diff --git a/fboss/led_service/Wedge800CACTLedManager.h b/fboss/led_service/Wedge800CACTLedManager.h
+new file mode 100644
+index 0000000000000..1c43dcb8fb2a8
+--- /dev/null
++++ b/fboss/led_service/Wedge800CACTLedManager.h
+@@ -0,0 +1,34 @@
++/*
++ *  Copyright (c) 2018-present, Facebook, Inc.
++ *  All rights reserved.
++ *
++ *  This source code is licensed under the BSD-style license found in the
++ *  LICENSE file in the root directory of this source tree. An additional grant
++ *  of patent rights can be found in the PATENTS file in the same directory.
++ *
++ */
++#pragma once
++
++#include "fboss/led_service/BspLedManager.h"
++#include "fboss/lib/bsp/BspSystemContainer.h"
++
++namespace facebook::fboss {
++
++/*
++ * Wedge800CACTLedManager class definiton:
++ *
++ * The BspLedManager class managing all LED in the system. The object is spawned
++ * by LED Service. This will subscribe to Fsdb to get Switch state update and
++ * then update the LED in hardware
++ */
++class Wedge800CACTLedManager : public BspLedManager {
++ public:
++  Wedge800CACTLedManager();
++  virtual ~Wedge800CACTLedManager() override {}
++
++  // Forbidden copy constructor and assignment operator
++  Wedge800CACTLedManager(Wedge800CACTLedManager const&) = delete;
++  Wedge800CACTLedManager& operator=(Wedge800CACTLedManager const&) = delete;
++};
++
++} // namespace facebook::fboss
+diff --git a/fboss/lib/bsp/BUCK b/fboss/lib/bsp/BUCK
+index 56ca531b7517d..5858139899997 100644
+--- a/fboss/lib/bsp/BUCK
++++ b/fboss/lib/bsp/BUCK
+@@ -102,6 +102,7 @@ cpp_library(
+         "//fboss/lib/bsp/morgan800cc:morgan800cc_bsp",
+         "//fboss/lib/bsp/tahan800bc:tahan800bc_bsp",
+         "//fboss/lib/bsp/tahansb800bc:tahansb800bc_bsp",
++        "//fboss/lib/bsp/wedge800cact:wedge800cact_bsp",
+         "//fboss/lib/fpga:fpga_device",
+         "//fboss/lib/fpga:multi_pim_container",
+         "//fboss/lib/i2c:i2c_controller_stats-cpp2-types",
+diff --git a/fboss/lib/bsp/BspGenericSystemContainer.cpp b/fboss/lib/bsp/BspGenericSystemContainer.cpp
+index 0ee59d6634fce..0a6c76c6bc6f5 100644
+--- a/fboss/lib/bsp/BspGenericSystemContainer.cpp
++++ b/fboss/lib/bsp/BspGenericSystemContainer.cpp
+@@ -16,6 +16,7 @@
+ #include "fboss/lib/bsp/morgan800cc/Morgan800ccBspPlatformMapping.h"
+ #include "fboss/lib/bsp/tahan800bc/Tahan800bcBspPlatformMapping.h"
+ #include "fboss/lib/bsp/tahansb800bc/Tahansb800bcBspPlatformMapping.h"
++#include "fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.h"
+ 
+ DEFINE_string(
+     bsp_platform_mapping_override_path,
+@@ -164,5 +165,14 @@ Tahansb800bcSystemContainer::getInstance() {
+   return _tahansb800bcSystemContainer.try_get();
+ }
+ 
++using Wedge800CACTSystemContainer =
++    BspGenericSystemContainer<Wedge800CACTBspPlatformMapping>;
++folly::Singleton<Wedge800CACTSystemContainer> _wedge800cactSystemContainer;
++template <>
++std::shared_ptr<Wedge800CACTSystemContainer>
++Wedge800CACTSystemContainer::getInstance() {
++  return _wedge800cactSystemContainer.try_get();
++}
++
+ } // namespace fboss
+ } // namespace facebook
+diff --git a/fboss/lib/bsp/bspmapping/Main.cpp b/fboss/lib/bsp/bspmapping/Main.cpp
+index d1a2710ca4669..3b6e8899e5ce0 100644
+--- a/fboss/lib/bsp/bspmapping/Main.cpp
++++ b/fboss/lib/bsp/bspmapping/Main.cpp
+@@ -47,6 +47,8 @@ const std::map<PlatformType, folly::StringPiece> kHardwareNameMap = {
+      kPortMappingIcetea800bcCsv},
+     {facebook::fboss::PlatformType::PLATFORM_TAHANSB800BC,
+      kPortMappingTahansb800bcCsv},
++    {facebook::fboss::PlatformType::PLATFORM_WEDGE800CACT,
++     kPortMappingWedge800CACTCsv},
+ };
+ 
+ // Helper function to generate PHY CSV filename from regular CSV filename
+diff --git a/fboss/lib/bsp/bspmapping/Parser.h b/fboss/lib/bsp/bspmapping/Parser.h
+index 6ca843e811ffb..23afc2aacf36a 100644
+--- a/fboss/lib/bsp/bspmapping/Parser.h
++++ b/fboss/lib/bsp/bspmapping/Parser.h
+@@ -37,6 +37,8 @@ inline constexpr folly::StringPiece kPortMappingIcetea800bcCsv{
+     "Icetea800bc_BspMapping.csv"};
+ inline constexpr folly::StringPiece kPortMappingTahansb800bcCsv{
+     "Tahansb800bc_BspMapping.csv"};
++inline constexpr folly::StringPiece kPortMappingWedge800CACTCsv{
++    "Wedge800CACT_BspMapping.csv"};
+ 
+ class Parser {
+  public:
+diff --git a/fboss/lib/bsp/bspmapping/input/Wedge800CACT_BspMapping.csv b/fboss/lib/bsp/bspmapping/input/Wedge800CACT_BspMapping.csv
+new file mode 100644
+index 0000000000000..02dfad3e38717
+--- /dev/null
++++ b/fboss/lib/bsp/bspmapping/input/Wedge800CACT_BspMapping.csv
+@@ -0,0 +1,98 @@
++TcvrId,TcvrLaneIdList,PimId,AccessControllerId,AccessControlType,ResetPath,ResetMask,ResetHoldHi,PresentPath,PresentMask,PresentHoldHi,IoControllerId,IoControlType,IoPath,LedId,LedBluePath,LedYellowPath
++1,1 2 3 4,1,1,CPLD,/run/devmap/xcvrs/xcvr_ctrl_1/xcvr_reset_1,1,1,/run/devmap/xcvrs/xcvr_ctrl_1/xcvr_present_1,1,0,1,I2C,/run/devmap/xcvrs/xcvr_io_1,1,/sys/class/leds/port1_led1:blue:status,/sys/class/leds/port1_led1:amber:status
++1,5 6 7 8,1,1,CPLD,/run/devmap/xcvrs/xcvr_ctrl_1/xcvr_reset_1,1,1,/run/devmap/xcvrs/xcvr_ctrl_1/xcvr_present_1,1,0,1,I2C,/run/devmap/xcvrs/xcvr_io_1,2,/sys/class/leds/port1_led2:blue:status,/sys/class/leds/port1_led2:amber:status
++2,1 2 3 4,1,2,CPLD,/run/devmap/xcvrs/xcvr_ctrl_2/xcvr_reset_2,1,1,/run/devmap/xcvrs/xcvr_ctrl_2/xcvr_present_2,1,0,2,I2C,/run/devmap/xcvrs/xcvr_io_2,3,/sys/class/leds/port2_led1:blue:status,/sys/class/leds/port2_led1:amber:status
++2,5 6 7 8,1,2,CPLD,/run/devmap/xcvrs/xcvr_ctrl_2/xcvr_reset_2,1,1,/run/devmap/xcvrs/xcvr_ctrl_2/xcvr_present_2,1,0,2,I2C,/run/devmap/xcvrs/xcvr_io_2,4,/sys/class/leds/port2_led2:blue:status,/sys/class/leds/port2_led2:amber:status
++3,1 2,1,3,CPLD,/run/devmap/xcvrs/xcvr_ctrl_3/xcvr_reset_3,1,1,/run/devmap/xcvrs/xcvr_ctrl_3/xcvr_present_3,1,0,3,I2C,/run/devmap/xcvrs/xcvr_io_3,5,/sys/class/leds/port3_led1:blue:status,/sys/class/leds/port3_led1:amber:status
++3,3 4,1,3,CPLD,/run/devmap/xcvrs/xcvr_ctrl_3/xcvr_reset_3,1,1,/run/devmap/xcvrs/xcvr_ctrl_3/xcvr_present_3,1,0,3,I2C,/run/devmap/xcvrs/xcvr_io_3,6,/sys/class/leds/port3_led2:blue:status,/sys/class/leds/port3_led2:amber:status
++3,5 6,1,3,CPLD,/run/devmap/xcvrs/xcvr_ctrl_3/xcvr_reset_3,1,1,/run/devmap/xcvrs/xcvr_ctrl_3/xcvr_present_3,1,0,3,I2C,/run/devmap/xcvrs/xcvr_io_3,7,/sys/class/leds/port3_led3:blue:status,/sys/class/leds/port3_led3:amber:status
++3,7 8,1,3,CPLD,/run/devmap/xcvrs/xcvr_ctrl_3/xcvr_reset_3,1,1,/run/devmap/xcvrs/xcvr_ctrl_3/xcvr_present_3,1,0,3,I2C,/run/devmap/xcvrs/xcvr_io_3,8,/sys/class/leds/port3_led4:blue:status,/sys/class/leds/port3_led4:amber:status
++4,1 2,1,4,CPLD,/run/devmap/xcvrs/xcvr_ctrl_4/xcvr_reset_4,1,1,/run/devmap/xcvrs/xcvr_ctrl_4/xcvr_present_4,1,0,4,I2C,/run/devmap/xcvrs/xcvr_io_4,9,/sys/class/leds/port4_led1:blue:status,/sys/class/leds/port4_led1:amber:status
++4,3 4,1,4,CPLD,/run/devmap/xcvrs/xcvr_ctrl_4/xcvr_reset_4,1,1,/run/devmap/xcvrs/xcvr_ctrl_4/xcvr_present_4,1,0,4,I2C,/run/devmap/xcvrs/xcvr_io_4,10,/sys/class/leds/port4_led2:blue:status,/sys/class/leds/port4_led2:amber:status
++4,5 6,1,4,CPLD,/run/devmap/xcvrs/xcvr_ctrl_4/xcvr_reset_4,1,1,/run/devmap/xcvrs/xcvr_ctrl_4/xcvr_present_4,1,0,4,I2C,/run/devmap/xcvrs/xcvr_io_4,11,/sys/class/leds/port4_led3:blue:status,/sys/class/leds/port4_led3:amber:status
++4,7 8,1,4,CPLD,/run/devmap/xcvrs/xcvr_ctrl_4/xcvr_reset_4,1,1,/run/devmap/xcvrs/xcvr_ctrl_4/xcvr_present_4,1,0,4,I2C,/run/devmap/xcvrs/xcvr_io_4,12,/sys/class/leds/port4_led4:blue:status,/sys/class/leds/port4_led4:amber:status
++5,1 2 3 4,1,5,CPLD,/run/devmap/xcvrs/xcvr_ctrl_5/xcvr_reset_5,1,1,/run/devmap/xcvrs/xcvr_ctrl_5/xcvr_present_5,1,0,5,I2C,/run/devmap/xcvrs/xcvr_io_5,13,/sys/class/leds/port5_led1:blue:status,/sys/class/leds/port5_led1:amber:status
++5,5 6 7 8,1,5,CPLD,/run/devmap/xcvrs/xcvr_ctrl_5/xcvr_reset_5,1,1,/run/devmap/xcvrs/xcvr_ctrl_5/xcvr_present_5,1,0,5,I2C,/run/devmap/xcvrs/xcvr_io_5,14,/sys/class/leds/port5_led2:blue:status,/sys/class/leds/port5_led2:amber:status
++6,1 2 3 4,1,6,CPLD,/run/devmap/xcvrs/xcvr_ctrl_6/xcvr_reset_6,1,1,/run/devmap/xcvrs/xcvr_ctrl_6/xcvr_present_6,1,0,6,I2C,/run/devmap/xcvrs/xcvr_io_6,15,/sys/class/leds/port6_led1:blue:status,/sys/class/leds/port6_led1:amber:status
++6,5 6 7 8,1,6,CPLD,/run/devmap/xcvrs/xcvr_ctrl_6/xcvr_reset_6,1,1,/run/devmap/xcvrs/xcvr_ctrl_6/xcvr_present_6,1,0,6,I2C,/run/devmap/xcvrs/xcvr_io_6,16,/sys/class/leds/port6_led2:blue:status,/sys/class/leds/port6_led2:amber:status
++7,1 2,1,7,CPLD,/run/devmap/xcvrs/xcvr_ctrl_7/xcvr_reset_7,1,1,/run/devmap/xcvrs/xcvr_ctrl_7/xcvr_present_7,1,0,7,I2C,/run/devmap/xcvrs/xcvr_io_7,17,/sys/class/leds/port7_led1:blue:status,/sys/class/leds/port7_led1:amber:status
++7,3 4,1,7,CPLD,/run/devmap/xcvrs/xcvr_ctrl_7/xcvr_reset_7,1,1,/run/devmap/xcvrs/xcvr_ctrl_7/xcvr_present_7,1,0,7,I2C,/run/devmap/xcvrs/xcvr_io_7,18,/sys/class/leds/port7_led2:blue:status,/sys/class/leds/port7_led2:amber:status
++7,5 6,1,7,CPLD,/run/devmap/xcvrs/xcvr_ctrl_7/xcvr_reset_7,1,1,/run/devmap/xcvrs/xcvr_ctrl_7/xcvr_present_7,1,0,7,I2C,/run/devmap/xcvrs/xcvr_io_7,19,/sys/class/leds/port7_led3:blue:status,/sys/class/leds/port7_led3:amber:status
++7,7 8,1,7,CPLD,/run/devmap/xcvrs/xcvr_ctrl_7/xcvr_reset_7,1,1,/run/devmap/xcvrs/xcvr_ctrl_7/xcvr_present_7,1,0,7,I2C,/run/devmap/xcvrs/xcvr_io_7,20,/sys/class/leds/port7_led4:blue:status,/sys/class/leds/port7_led4:amber:status
++8,1 2,1,8,CPLD,/run/devmap/xcvrs/xcvr_ctrl_8/xcvr_reset_8,1,1,/run/devmap/xcvrs/xcvr_ctrl_8/xcvr_present_8,1,0,8,I2C,/run/devmap/xcvrs/xcvr_io_8,21,/sys/class/leds/port8_led1:blue:status,/sys/class/leds/port8_led1:amber:status
++8,3 4,1,8,CPLD,/run/devmap/xcvrs/xcvr_ctrl_8/xcvr_reset_8,1,1,/run/devmap/xcvrs/xcvr_ctrl_8/xcvr_present_8,1,0,8,I2C,/run/devmap/xcvrs/xcvr_io_8,22,/sys/class/leds/port8_led2:blue:status,/sys/class/leds/port8_led2:amber:status
++8,5 6,1,8,CPLD,/run/devmap/xcvrs/xcvr_ctrl_8/xcvr_reset_8,1,1,/run/devmap/xcvrs/xcvr_ctrl_8/xcvr_present_8,1,0,8,I2C,/run/devmap/xcvrs/xcvr_io_8,23,/sys/class/leds/port8_led3:blue:status,/sys/class/leds/port8_led3:amber:status
++8,7 8,1,8,CPLD,/run/devmap/xcvrs/xcvr_ctrl_8/xcvr_reset_8,1,1,/run/devmap/xcvrs/xcvr_ctrl_8/xcvr_present_8,1,0,8,I2C,/run/devmap/xcvrs/xcvr_io_8,24,/sys/class/leds/port8_led4:blue:status,/sys/class/leds/port8_led4:amber:status
++9,1 2 3 4,1,9,CPLD,/run/devmap/xcvrs/xcvr_ctrl_9/xcvr_reset_9,1,1,/run/devmap/xcvrs/xcvr_ctrl_9/xcvr_present_9,1,0,9,I2C,/run/devmap/xcvrs/xcvr_io_9,25,/sys/class/leds/port9_led1:blue:status,/sys/class/leds/port9_led1:amber:status
++9,5 6 7 8,1,9,CPLD,/run/devmap/xcvrs/xcvr_ctrl_9/xcvr_reset_9,1,1,/run/devmap/xcvrs/xcvr_ctrl_9/xcvr_present_9,1,0,9,I2C,/run/devmap/xcvrs/xcvr_io_9,26,/sys/class/leds/port9_led2:blue:status,/sys/class/leds/port9_led2:amber:status
++10,1 2 3 4,1,10,CPLD,/run/devmap/xcvrs/xcvr_ctrl_10/xcvr_reset_10,1,1,/run/devmap/xcvrs/xcvr_ctrl_10/xcvr_present_10,1,0,10,I2C,/run/devmap/xcvrs/xcvr_io_10,27,/sys/class/leds/port10_led1:blue:status,/sys/class/leds/port10_led1:amber:status
++10,5 6 7 8,1,10,CPLD,/run/devmap/xcvrs/xcvr_ctrl_10/xcvr_reset_10,1,1,/run/devmap/xcvrs/xcvr_ctrl_10/xcvr_present_10,1,0,10,I2C,/run/devmap/xcvrs/xcvr_io_10,28,/sys/class/leds/port10_led2:blue:status,/sys/class/leds/port10_led2:amber:status
++11,1 2,1,11,CPLD,/run/devmap/xcvrs/xcvr_ctrl_11/xcvr_reset_11,1,1,/run/devmap/xcvrs/xcvr_ctrl_11/xcvr_present_11,1,0,11,I2C,/run/devmap/xcvrs/xcvr_io_11,29,/sys/class/leds/port11_led1:blue:status,/sys/class/leds/port11_led1:amber:status
++11,3 4,1,11,CPLD,/run/devmap/xcvrs/xcvr_ctrl_11/xcvr_reset_11,1,1,/run/devmap/xcvrs/xcvr_ctrl_11/xcvr_present_11,1,0,11,I2C,/run/devmap/xcvrs/xcvr_io_11,30,/sys/class/leds/port11_led2:blue:status,/sys/class/leds/port11_led2:amber:status
++11,5 6,1,11,CPLD,/run/devmap/xcvrs/xcvr_ctrl_11/xcvr_reset_11,1,1,/run/devmap/xcvrs/xcvr_ctrl_11/xcvr_present_11,1,0,11,I2C,/run/devmap/xcvrs/xcvr_io_11,31,/sys/class/leds/port11_led3:blue:status,/sys/class/leds/port11_led3:amber:status
++11,7 8,1,11,CPLD,/run/devmap/xcvrs/xcvr_ctrl_11/xcvr_reset_11,1,1,/run/devmap/xcvrs/xcvr_ctrl_11/xcvr_present_11,1,0,11,I2C,/run/devmap/xcvrs/xcvr_io_11,32,/sys/class/leds/port11_led4:blue:status,/sys/class/leds/port11_led4:amber:status
++12,1 2,1,12,CPLD,/run/devmap/xcvrs/xcvr_ctrl_12/xcvr_reset_12,1,1,/run/devmap/xcvrs/xcvr_ctrl_12/xcvr_present_12,1,0,12,I2C,/run/devmap/xcvrs/xcvr_io_12,33,/sys/class/leds/port12_led1:blue:status,/sys/class/leds/port12_led1:amber:status
++12,3 4,1,12,CPLD,/run/devmap/xcvrs/xcvr_ctrl_12/xcvr_reset_12,1,1,/run/devmap/xcvrs/xcvr_ctrl_12/xcvr_present_12,1,0,12,I2C,/run/devmap/xcvrs/xcvr_io_12,34,/sys/class/leds/port12_led2:blue:status,/sys/class/leds/port12_led2:amber:status
++12,5 6,1,12,CPLD,/run/devmap/xcvrs/xcvr_ctrl_12/xcvr_reset_12,1,1,/run/devmap/xcvrs/xcvr_ctrl_12/xcvr_present_12,1,0,12,I2C,/run/devmap/xcvrs/xcvr_io_12,35,/sys/class/leds/port12_led3:blue:status,/sys/class/leds/port12_led3:amber:status
++12,7 8,1,12,CPLD,/run/devmap/xcvrs/xcvr_ctrl_12/xcvr_reset_12,1,1,/run/devmap/xcvrs/xcvr_ctrl_12/xcvr_present_12,1,0,12,I2C,/run/devmap/xcvrs/xcvr_io_12,36,/sys/class/leds/port12_led4:blue:status,/sys/class/leds/port12_led4:amber:status
++13,1 2 3 4,1,13,CPLD,/run/devmap/xcvrs/xcvr_ctrl_13/xcvr_reset_13,1,1,/run/devmap/xcvrs/xcvr_ctrl_13/xcvr_present_13,1,0,13,I2C,/run/devmap/xcvrs/xcvr_io_13,37,/sys/class/leds/port13_led1:blue:status,/sys/class/leds/port13_led1:amber:status
++13,5 6 7 8,1,13,CPLD,/run/devmap/xcvrs/xcvr_ctrl_13/xcvr_reset_13,1,1,/run/devmap/xcvrs/xcvr_ctrl_13/xcvr_present_13,1,0,13,I2C,/run/devmap/xcvrs/xcvr_io_13,38,/sys/class/leds/port13_led2:blue:status,/sys/class/leds/port13_led2:amber:status
++14,1 2 3 4,1,14,CPLD,/run/devmap/xcvrs/xcvr_ctrl_14/xcvr_reset_14,1,1,/run/devmap/xcvrs/xcvr_ctrl_14/xcvr_present_14,1,0,14,I2C,/run/devmap/xcvrs/xcvr_io_14,39,/sys/class/leds/port14_led1:blue:status,/sys/class/leds/port14_led1:amber:status
++14,5 6 7 8,1,14,CPLD,/run/devmap/xcvrs/xcvr_ctrl_14/xcvr_reset_14,1,1,/run/devmap/xcvrs/xcvr_ctrl_14/xcvr_present_14,1,0,14,I2C,/run/devmap/xcvrs/xcvr_io_14,40,/sys/class/leds/port14_led2:blue:status,/sys/class/leds/port14_led2:amber:status
++15,1 2,1,15,CPLD,/run/devmap/xcvrs/xcvr_ctrl_15/xcvr_reset_15,1,1,/run/devmap/xcvrs/xcvr_ctrl_15/xcvr_present_15,1,0,15,I2C,/run/devmap/xcvrs/xcvr_io_15,41,/sys/class/leds/port15_led1:blue:status,/sys/class/leds/port15_led1:amber:status
++15,3 4,1,15,CPLD,/run/devmap/xcvrs/xcvr_ctrl_15/xcvr_reset_15,1,1,/run/devmap/xcvrs/xcvr_ctrl_15/xcvr_present_15,1,0,15,I2C,/run/devmap/xcvrs/xcvr_io_15,42,/sys/class/leds/port15_led2:blue:status,/sys/class/leds/port15_led2:amber:status
++15,5 6,1,15,CPLD,/run/devmap/xcvrs/xcvr_ctrl_15/xcvr_reset_15,1,1,/run/devmap/xcvrs/xcvr_ctrl_15/xcvr_present_15,1,0,15,I2C,/run/devmap/xcvrs/xcvr_io_15,43,/sys/class/leds/port15_led3:blue:status,/sys/class/leds/port15_led3:amber:status
++15,7 8,1,15,CPLD,/run/devmap/xcvrs/xcvr_ctrl_15/xcvr_reset_15,1,1,/run/devmap/xcvrs/xcvr_ctrl_15/xcvr_present_15,1,0,15,I2C,/run/devmap/xcvrs/xcvr_io_15,44,/sys/class/leds/port15_led4:blue:status,/sys/class/leds/port15_led4:amber:status
++16,1 2,1,16,CPLD,/run/devmap/xcvrs/xcvr_ctrl_16/xcvr_reset_16,1,1,/run/devmap/xcvrs/xcvr_ctrl_16/xcvr_present_16,1,0,16,I2C,/run/devmap/xcvrs/xcvr_io_16,45,/sys/class/leds/port16_led1:blue:status,/sys/class/leds/port16_led1:amber:status
++16,3 4,1,16,CPLD,/run/devmap/xcvrs/xcvr_ctrl_16/xcvr_reset_16,1,1,/run/devmap/xcvrs/xcvr_ctrl_16/xcvr_present_16,1,0,16,I2C,/run/devmap/xcvrs/xcvr_io_16,46,/sys/class/leds/port16_led2:blue:status,/sys/class/leds/port16_led2:amber:status
++16,5 6,1,16,CPLD,/run/devmap/xcvrs/xcvr_ctrl_16/xcvr_reset_16,1,1,/run/devmap/xcvrs/xcvr_ctrl_16/xcvr_present_16,1,0,16,I2C,/run/devmap/xcvrs/xcvr_io_16,47,/sys/class/leds/port16_led3:blue:status,/sys/class/leds/port16_led3:amber:status
++16,7 8,1,16,CPLD,/run/devmap/xcvrs/xcvr_ctrl_16/xcvr_reset_16,1,1,/run/devmap/xcvrs/xcvr_ctrl_16/xcvr_present_16,1,0,16,I2C,/run/devmap/xcvrs/xcvr_io_16,48,/sys/class/leds/port16_led4:blue:status,/sys/class/leds/port16_led4:amber:status
++17,1 2 3 4,1,17,CPLD,/run/devmap/xcvrs/xcvr_ctrl_17/xcvr_reset_17,1,1,/run/devmap/xcvrs/xcvr_ctrl_17/xcvr_present_17,1,0,17,I2C,/run/devmap/xcvrs/xcvr_io_17,49,/sys/class/leds/port17_led1:blue:status,/sys/class/leds/port17_led1:amber:status
++17,5 6 7 8,1,17,CPLD,/run/devmap/xcvrs/xcvr_ctrl_17/xcvr_reset_17,1,1,/run/devmap/xcvrs/xcvr_ctrl_17/xcvr_present_17,1,0,17,I2C,/run/devmap/xcvrs/xcvr_io_17,50,/sys/class/leds/port17_led2:blue:status,/sys/class/leds/port17_led2:amber:status
++18,1 2 3 4,1,18,CPLD,/run/devmap/xcvrs/xcvr_ctrl_18/xcvr_reset_18,1,1,/run/devmap/xcvrs/xcvr_ctrl_18/xcvr_present_18,1,0,18,I2C,/run/devmap/xcvrs/xcvr_io_18,51,/sys/class/leds/port18_led1:blue:status,/sys/class/leds/port18_led1:amber:status
++18,5 6 7 8,1,18,CPLD,/run/devmap/xcvrs/xcvr_ctrl_18/xcvr_reset_18,1,1,/run/devmap/xcvrs/xcvr_ctrl_18/xcvr_present_18,1,0,18,I2C,/run/devmap/xcvrs/xcvr_io_18,52,/sys/class/leds/port18_led2:blue:status,/sys/class/leds/port18_led2:amber:status
++19,1 2,1,19,CPLD,/run/devmap/xcvrs/xcvr_ctrl_19/xcvr_reset_19,1,1,/run/devmap/xcvrs/xcvr_ctrl_19/xcvr_present_19,1,0,19,I2C,/run/devmap/xcvrs/xcvr_io_19,53,/sys/class/leds/port19_led1:blue:status,/sys/class/leds/port19_led1:amber:status
++19,3 4,1,19,CPLD,/run/devmap/xcvrs/xcvr_ctrl_19/xcvr_reset_19,1,1,/run/devmap/xcvrs/xcvr_ctrl_19/xcvr_present_19,1,0,19,I2C,/run/devmap/xcvrs/xcvr_io_19,54,/sys/class/leds/port19_led2:blue:status,/sys/class/leds/port19_led2:amber:status
++19,5 6,1,19,CPLD,/run/devmap/xcvrs/xcvr_ctrl_19/xcvr_reset_19,1,1,/run/devmap/xcvrs/xcvr_ctrl_19/xcvr_present_19,1,0,19,I2C,/run/devmap/xcvrs/xcvr_io_19,55,/sys/class/leds/port19_led3:blue:status,/sys/class/leds/port19_led3:amber:status
++19,7 8,1,19,CPLD,/run/devmap/xcvrs/xcvr_ctrl_19/xcvr_reset_19,1,1,/run/devmap/xcvrs/xcvr_ctrl_19/xcvr_present_19,1,0,19,I2C,/run/devmap/xcvrs/xcvr_io_19,56,/sys/class/leds/port19_led4:blue:status,/sys/class/leds/port19_led4:amber:status
++20,1 2,1,20,CPLD,/run/devmap/xcvrs/xcvr_ctrl_20/xcvr_reset_20,1,1,/run/devmap/xcvrs/xcvr_ctrl_20/xcvr_present_20,1,0,20,I2C,/run/devmap/xcvrs/xcvr_io_20,57,/sys/class/leds/port20_led1:blue:status,/sys/class/leds/port20_led1:amber:status
++20,3 4,1,20,CPLD,/run/devmap/xcvrs/xcvr_ctrl_20/xcvr_reset_20,1,1,/run/devmap/xcvrs/xcvr_ctrl_20/xcvr_present_20,1,0,20,I2C,/run/devmap/xcvrs/xcvr_io_20,58,/sys/class/leds/port20_led2:blue:status,/sys/class/leds/port20_led2:amber:status
++20,5 6,1,20,CPLD,/run/devmap/xcvrs/xcvr_ctrl_20/xcvr_reset_20,1,1,/run/devmap/xcvrs/xcvr_ctrl_20/xcvr_present_20,1,0,20,I2C,/run/devmap/xcvrs/xcvr_io_20,59,/sys/class/leds/port20_led3:blue:status,/sys/class/leds/port20_led3:amber:status
++20,7 8,1,20,CPLD,/run/devmap/xcvrs/xcvr_ctrl_20/xcvr_reset_20,1,1,/run/devmap/xcvrs/xcvr_ctrl_20/xcvr_present_20,1,0,20,I2C,/run/devmap/xcvrs/xcvr_io_20,60,/sys/class/leds/port20_led4:blue:status,/sys/class/leds/port20_led4:amber:status
++21,1 2 3 4,1,21,CPLD,/run/devmap/xcvrs/xcvr_ctrl_21/xcvr_reset_21,1,1,/run/devmap/xcvrs/xcvr_ctrl_21/xcvr_present_21,1,0,21,I2C,/run/devmap/xcvrs/xcvr_io_21,61,/sys/class/leds/port21_led1:blue:status,/sys/class/leds/port21_led1:amber:status
++21,5 6 7 8,1,21,CPLD,/run/devmap/xcvrs/xcvr_ctrl_21/xcvr_reset_21,1,1,/run/devmap/xcvrs/xcvr_ctrl_21/xcvr_present_21,1,0,21,I2C,/run/devmap/xcvrs/xcvr_io_21,62,/sys/class/leds/port21_led2:blue:status,/sys/class/leds/port21_led2:amber:status
++22,1 2 3 4,1,22,CPLD,/run/devmap/xcvrs/xcvr_ctrl_22/xcvr_reset_22,1,1,/run/devmap/xcvrs/xcvr_ctrl_22/xcvr_present_22,1,0,22,I2C,/run/devmap/xcvrs/xcvr_io_22,63,/sys/class/leds/port22_led1:blue:status,/sys/class/leds/port22_led1:amber:status
++22,5 6 7 8,1,22,CPLD,/run/devmap/xcvrs/xcvr_ctrl_22/xcvr_reset_22,1,1,/run/devmap/xcvrs/xcvr_ctrl_22/xcvr_present_22,1,0,22,I2C,/run/devmap/xcvrs/xcvr_io_22,64,/sys/class/leds/port22_led2:blue:status,/sys/class/leds/port22_led2:amber:status
++23,1 2,1,23,CPLD,/run/devmap/xcvrs/xcvr_ctrl_23/xcvr_reset_23,1,1,/run/devmap/xcvrs/xcvr_ctrl_23/xcvr_present_23,1,0,23,I2C,/run/devmap/xcvrs/xcvr_io_23,65,/sys/class/leds/port23_led1:blue:status,/sys/class/leds/port23_led1:amber:status
++23,3 4,1,23,CPLD,/run/devmap/xcvrs/xcvr_ctrl_23/xcvr_reset_23,1,1,/run/devmap/xcvrs/xcvr_ctrl_23/xcvr_present_23,1,0,23,I2C,/run/devmap/xcvrs/xcvr_io_23,66,/sys/class/leds/port23_led2:blue:status,/sys/class/leds/port23_led2:amber:status
++23,5 6,1,23,CPLD,/run/devmap/xcvrs/xcvr_ctrl_23/xcvr_reset_23,1,1,/run/devmap/xcvrs/xcvr_ctrl_23/xcvr_present_23,1,0,23,I2C,/run/devmap/xcvrs/xcvr_io_23,67,/sys/class/leds/port23_led3:blue:status,/sys/class/leds/port23_led1:amber:status
++23,7 8,1,23,CPLD,/run/devmap/xcvrs/xcvr_ctrl_23/xcvr_reset_23,1,1,/run/devmap/xcvrs/xcvr_ctrl_23/xcvr_present_23,1,0,23,I2C,/run/devmap/xcvrs/xcvr_io_23,68,/sys/class/leds/port23_led4:blue:status,/sys/class/leds/port23_led2:amber:status
++24,1 2,1,24,CPLD,/run/devmap/xcvrs/xcvr_ctrl_24/xcvr_reset_24,1,1,/run/devmap/xcvrs/xcvr_ctrl_24/xcvr_present_24,1,0,24,I2C,/run/devmap/xcvrs/xcvr_io_24,69,/sys/class/leds/port24_led1:blue:status,/sys/class/leds/port24_led1:amber:status
++24,3 4,1,24,CPLD,/run/devmap/xcvrs/xcvr_ctrl_24/xcvr_reset_24,1,1,/run/devmap/xcvrs/xcvr_ctrl_24/xcvr_present_24,1,0,24,I2C,/run/devmap/xcvrs/xcvr_io_24,70,/sys/class/leds/port24_led2:blue:status,/sys/class/leds/port24_led2:amber:status
++24,5 6,1,24,CPLD,/run/devmap/xcvrs/xcvr_ctrl_24/xcvr_reset_24,1,1,/run/devmap/xcvrs/xcvr_ctrl_24/xcvr_present_24,1,0,24,I2C,/run/devmap/xcvrs/xcvr_io_24,71,/sys/class/leds/port24_led3:blue:status,/sys/class/leds/port24_led3:amber:status
++24,7 8,1,24,CPLD,/run/devmap/xcvrs/xcvr_ctrl_24/xcvr_reset_24,1,1,/run/devmap/xcvrs/xcvr_ctrl_24/xcvr_present_24,1,0,24,I2C,/run/devmap/xcvrs/xcvr_io_24,72,/sys/class/leds/port24_led4:blue:status,/sys/class/leds/port24_led4:amber:status
++25,1 2 3 4,1,25,CPLD,/run/devmap/xcvrs/xcvr_ctrl_25/xcvr_reset_25,1,1,/run/devmap/xcvrs/xcvr_ctrl_25/xcvr_present_25,1,0,25,I2C,/run/devmap/xcvrs/xcvr_io_25,73,/sys/class/leds/port25_led1:blue:status,/sys/class/leds/port25_led1:amber:status
++25,5 6 7 8,1,25,CPLD,/run/devmap/xcvrs/xcvr_ctrl_25/xcvr_reset_25,1,1,/run/devmap/xcvrs/xcvr_ctrl_25/xcvr_present_25,1,0,25,I2C,/run/devmap/xcvrs/xcvr_io_25,74,/sys/class/leds/port25_led2:blue:status,/sys/class/leds/port25_led2:amber:status
++26,1 2 3 4,1,26,CPLD,/run/devmap/xcvrs/xcvr_ctrl_26/xcvr_reset_26,1,1,/run/devmap/xcvrs/xcvr_ctrl_26/xcvr_present_26,1,0,26,I2C,/run/devmap/xcvrs/xcvr_io_26,75,/sys/class/leds/port26_led1:blue:status,/sys/class/leds/port26_led1:amber:status
++26,5 6 7 8,1,26,CPLD,/run/devmap/xcvrs/xcvr_ctrl_26/xcvr_reset_26,1,1,/run/devmap/xcvrs/xcvr_ctrl_26/xcvr_present_26,1,0,26,I2C,/run/devmap/xcvrs/xcvr_io_26,76,/sys/class/leds/port26_led2:blue:status,/sys/class/leds/port26_led2:amber:status
++27,1 2,1,27,CPLD,/run/devmap/xcvrs/xcvr_ctrl_27/xcvr_reset_27,1,1,/run/devmap/xcvrs/xcvr_ctrl_27/xcvr_present_27,1,0,27,I2C,/run/devmap/xcvrs/xcvr_io_27,77,/sys/class/leds/port27_led1:blue:status,/sys/class/leds/port27_led1:amber:status
++27,3 4,1,27,CPLD,/run/devmap/xcvrs/xcvr_ctrl_27/xcvr_reset_27,1,1,/run/devmap/xcvrs/xcvr_ctrl_27/xcvr_present_27,1,0,27,I2C,/run/devmap/xcvrs/xcvr_io_27,78,/sys/class/leds/port27_led2:blue:status,/sys/class/leds/port27_led2:amber:status
++27,5 6,1,27,CPLD,/run/devmap/xcvrs/xcvr_ctrl_27/xcvr_reset_27,1,1,/run/devmap/xcvrs/xcvr_ctrl_27/xcvr_present_27,1,0,27,I2C,/run/devmap/xcvrs/xcvr_io_27,79,/sys/class/leds/port27_led3:blue:status,/sys/class/leds/port27_led3:amber:status
++27,7 8,1,27,CPLD,/run/devmap/xcvrs/xcvr_ctrl_27/xcvr_reset_27,1,1,/run/devmap/xcvrs/xcvr_ctrl_27/xcvr_present_27,1,0,27,I2C,/run/devmap/xcvrs/xcvr_io_27,80,/sys/class/leds/port27_led4:blue:status,/sys/class/leds/port27_led4:amber:status
++28,1 2,1,28,CPLD,/run/devmap/xcvrs/xcvr_ctrl_28/xcvr_reset_28,1,1,/run/devmap/xcvrs/xcvr_ctrl_28/xcvr_present_28,1,0,28,I2C,/run/devmap/xcvrs/xcvr_io_28,81,/sys/class/leds/port28_led1:blue:status,/sys/class/leds/port28_led1:amber:status
++28,3 4,1,28,CPLD,/run/devmap/xcvrs/xcvr_ctrl_28/xcvr_reset_28,1,1,/run/devmap/xcvrs/xcvr_ctrl_28/xcvr_present_28,1,0,28,I2C,/run/devmap/xcvrs/xcvr_io_28,82,/sys/class/leds/port28_led2:blue:status,/sys/class/leds/port28_led2:amber:status
++28,5 6,1,28,CPLD,/run/devmap/xcvrs/xcvr_ctrl_28/xcvr_reset_28,1,1,/run/devmap/xcvrs/xcvr_ctrl_28/xcvr_present_28,1,0,28,I2C,/run/devmap/xcvrs/xcvr_io_28,83,/sys/class/leds/port28_led3:blue:status,/sys/class/leds/port28_led3:amber:status
++28,7 8,1,28,CPLD,/run/devmap/xcvrs/xcvr_ctrl_28/xcvr_reset_28,1,1,/run/devmap/xcvrs/xcvr_ctrl_28/xcvr_present_28,1,0,28,I2C,/run/devmap/xcvrs/xcvr_io_28,84,/sys/class/leds/port28_led4:blue:status,/sys/class/leds/port28_led4:amber:status
++29,1 2 3 4,1,29,CPLD,/run/devmap/xcvrs/xcvr_ctrl_29/xcvr_reset_29,1,1,/run/devmap/xcvrs/xcvr_ctrl_29/xcvr_present_29,1,0,29,I2C,/run/devmap/xcvrs/xcvr_io_29,85,/sys/class/leds/port29_led1:blue:status,/sys/class/leds/port29_led1:amber:status
++29,5 6 7 8,1,29,CPLD,/run/devmap/xcvrs/xcvr_ctrl_29/xcvr_reset_29,1,1,/run/devmap/xcvrs/xcvr_ctrl_29/xcvr_present_29,1,0,29,I2C,/run/devmap/xcvrs/xcvr_io_29,86,/sys/class/leds/port29_led2:blue:status,/sys/class/leds/port29_led2:amber:status
++30,1 2 3 4,1,30,CPLD,/run/devmap/xcvrs/xcvr_ctrl_30/xcvr_reset_30,1,1,/run/devmap/xcvrs/xcvr_ctrl_30/xcvr_present_30,1,0,30,I2C,/run/devmap/xcvrs/xcvr_io_30,87,/sys/class/leds/port30_led1:blue:status,/sys/class/leds/port30_led1:amber:status
++30,5 6 7 8,1,30,CPLD,/run/devmap/xcvrs/xcvr_ctrl_30/xcvr_reset_30,1,1,/run/devmap/xcvrs/xcvr_ctrl_30/xcvr_present_30,1,0,30,I2C,/run/devmap/xcvrs/xcvr_io_30,88,/sys/class/leds/port30_led2:blue:status,/sys/class/leds/port30_led2:amber:status
++31,1 2,1,31,CPLD,/run/devmap/xcvrs/xcvr_ctrl_31/xcvr_reset_31,1,1,/run/devmap/xcvrs/xcvr_ctrl_31/xcvr_present_31,1,0,31,I2C,/run/devmap/xcvrs/xcvr_io_31,89,/sys/class/leds/port31_led1:blue:status,/sys/class/leds/port31_led1:amber:status
++31,3 4,1,31,CPLD,/run/devmap/xcvrs/xcvr_ctrl_31/xcvr_reset_31,1,1,/run/devmap/xcvrs/xcvr_ctrl_31/xcvr_present_31,1,0,31,I2C,/run/devmap/xcvrs/xcvr_io_31,90,/sys/class/leds/port31_led2:blue:status,/sys/class/leds/port31_led2:amber:status
++31,5 6,1,31,CPLD,/run/devmap/xcvrs/xcvr_ctrl_31/xcvr_reset_31,1,1,/run/devmap/xcvrs/xcvr_ctrl_31/xcvr_present_31,1,0,31,I2C,/run/devmap/xcvrs/xcvr_io_31,91,/sys/class/leds/port31_led3:blue:status,/sys/class/leds/port31_led3:amber:status
++31,7 8,1,31,CPLD,/run/devmap/xcvrs/xcvr_ctrl_31/xcvr_reset_31,1,1,/run/devmap/xcvrs/xcvr_ctrl_31/xcvr_present_31,1,0,31,I2C,/run/devmap/xcvrs/xcvr_io_31,92,/sys/class/leds/port31_led4:blue:status,/sys/class/leds/port31_led4:amber:status
++32,1 2,1,32,CPLD,/run/devmap/xcvrs/xcvr_ctrl_32/xcvr_reset_32,1,1,/run/devmap/xcvrs/xcvr_ctrl_32/xcvr_present_32,1,0,32,I2C,/run/devmap/xcvrs/xcvr_io_32,93,/sys/class/leds/port32_led1:blue:status,/sys/class/leds/port32_led1:amber:status
++32,3 4,1,32,CPLD,/run/devmap/xcvrs/xcvr_ctrl_32/xcvr_reset_32,1,1,/run/devmap/xcvrs/xcvr_ctrl_32/xcvr_present_32,1,0,32,I2C,/run/devmap/xcvrs/xcvr_io_32,94,/sys/class/leds/port32_led2:blue:status,/sys/class/leds/port32_led2:amber:status
++32,5 6,1,32,CPLD,/run/devmap/xcvrs/xcvr_ctrl_32/xcvr_reset_32,1,1,/run/devmap/xcvrs/xcvr_ctrl_32/xcvr_present_32,1,0,32,I2C,/run/devmap/xcvrs/xcvr_io_32,95,/sys/class/leds/port32_led3:blue:status,/sys/class/leds/port32_led3:amber:status
++32,7 8,1,32,CPLD,/run/devmap/xcvrs/xcvr_ctrl_32/xcvr_reset_32,1,1,/run/devmap/xcvrs/xcvr_ctrl_32/xcvr_present_32,1,0,32,I2C,/run/devmap/xcvrs/xcvr_io_32,96,/sys/class/leds/port32_led4:blue:status,/sys/class/leds/port32_led4:amber:status
++33,1 2 3 4,1,33,CPLD,/run/devmap/xcvrs/xcvr_ctrl_33/xcvr_reset_33,1,1,/run/devmap/xcvrs/xcvr_ctrl_33/xcvr_present_33,1,0,33,I2C,/run/devmap/xcvrs/xcvr_io_33,97,/sys/class/leds/port33_led1:blue:status,/sys/class/leds/port33_led1:amber:status
+diff --git a/fboss/lib/bsp/bspmapping/test/ParserTest.cpp b/fboss/lib/bsp/bspmapping/test/ParserTest.cpp
+index 08104918120ff..5e9c916732ee3 100644
+--- a/fboss/lib/bsp/bspmapping/test/ParserTest.cpp
++++ b/fboss/lib/bsp/bspmapping/test/ParserTest.cpp
+@@ -64,6 +64,10 @@ TEST(ParserTest, GetNameForTests) {
+       facebook::fboss::Parser::getNameFor(
+           facebook::fboss::PlatformType::PLATFORM_TAHANSB800BC),
+       "tahansb");
++  EXPECT_EQ(
++      facebook::fboss::Parser::getNameFor(
++          facebook::fboss::PlatformType::PLATFORM_WEDGE800CACT),
++      "wedge800cact");
+ }
+ 
+ TEST(ParserTest, GetTransceiverConfigRowFromCsvLine) {
+diff --git a/fboss/lib/bsp/wedge800cact/BUCK b/fboss/lib/bsp/wedge800cact/BUCK
+new file mode 100644
+index 0000000000000..f542afa97416d
+--- /dev/null
++++ b/fboss/lib/bsp/wedge800cact/BUCK
+@@ -0,0 +1,18 @@
++load("@fbcode_macros//build_defs:cpp_library.bzl", "cpp_library")
++
++oncall("fboss_optics_phy")
++
++cpp_library(
++    name = "wedge800cact_bsp",
++    srcs = [
++        "Wedge800CACTBspPlatformMapping.cpp",
++    ],
++    headers = [
++        "Wedge800CACTBspPlatformMapping.h",
++    ],
++    exported_deps = [
++        "//fboss/lib/bsp:bsp_platform_mapping-cpp2-types",
++        "//fboss/lib/bsp:bsp_platform_mapping_lib",
++        "//thrift/lib/cpp2/protocol:protocol",
++    ],
++)
+diff --git a/fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.cpp b/fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.cpp
+new file mode 100644
+index 0000000000000..18e95eda739f3
+--- /dev/null
++++ b/fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.cpp
+@@ -0,0 +1,1782 @@
++// (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
++
++#include "fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.h"
++#include <thrift/lib/cpp2/protocol/Serializer.h>
++#include "fboss/lib/bsp/BspPlatformMapping.h"
++#include "fboss/lib/bsp/gen-cpp2/bsp_platform_mapping_types.h"
++
++using namespace facebook::fboss;
++using namespace apache::thrift;
++
++namespace {
++constexpr auto kJsonBspPlatformMappingStr = R"(
++{
++  "pimMapping": {
++    "1": {
++      "pimID": 1,
++      "tcvrMapping": {
++        "1": {
++          "tcvrId": 1,
++          "accessControl": {
++            "controllerId": "1",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_1/xcvr_reset_1",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_1/xcvr_present_1",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "1",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_1"
++          },
++          "tcvrLaneToLedId": {
++            "1": 1,
++            "2": 1,
++            "3": 1,
++            "4": 1,
++            "5": 2,
++            "6": 2,
++            "7": 2,
++            "8": 2
++          }
++        },
++        "2": {
++          "tcvrId": 2,
++          "accessControl": {
++            "controllerId": "2",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_2/xcvr_reset_2",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_2/xcvr_present_2",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "2",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_2"
++          },
++          "tcvrLaneToLedId": {
++            "1": 3,
++            "2": 3,
++            "3": 3,
++            "4": 3,
++            "5": 4,
++            "6": 4,
++            "7": 4,
++            "8": 4
++          }
++        },
++        "3": {
++          "tcvrId": 3,
++          "accessControl": {
++            "controllerId": "3",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_3/xcvr_reset_3",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_3/xcvr_present_3",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "3",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_3"
++          },
++          "tcvrLaneToLedId": {
++            "1": 5,
++            "2": 5,
++            "3": 6,
++            "4": 6,
++            "5": 7,
++            "6": 7,
++            "7": 8,
++            "8": 8
++          }
++        },
++        "4": {
++          "tcvrId": 4,
++          "accessControl": {
++            "controllerId": "4",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_4/xcvr_reset_4",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_4/xcvr_present_4",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "4",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_4"
++          },
++          "tcvrLaneToLedId": {
++            "1": 9,
++            "2": 9,
++            "3": 10,
++            "4": 10,
++            "5": 11,
++            "6": 11,
++            "7": 12,
++            "8": 12
++          }
++        },
++        "5": {
++          "tcvrId": 5,
++          "accessControl": {
++            "controllerId": "5",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_5/xcvr_reset_5",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_5/xcvr_present_5",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "5",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_5"
++          },
++          "tcvrLaneToLedId": {
++            "1": 13,
++            "2": 13,
++            "3": 13,
++            "4": 13,
++            "5": 14,
++            "6": 14,
++            "7": 14,
++            "8": 14
++          }
++        },
++        "6": {
++          "tcvrId": 6,
++          "accessControl": {
++            "controllerId": "6",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_6/xcvr_reset_6",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_6/xcvr_present_6",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "6",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_6"
++          },
++          "tcvrLaneToLedId": {
++            "1": 15,
++            "2": 15,
++            "3": 15,
++            "4": 15,
++            "5": 16,
++            "6": 16,
++            "7": 16,
++            "8": 16
++          }
++        },
++        "7": {
++          "tcvrId": 7,
++          "accessControl": {
++            "controllerId": "7",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_7/xcvr_reset_7",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_7/xcvr_present_7",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "7",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_7"
++          },
++          "tcvrLaneToLedId": {
++            "1": 17,
++            "2": 17,
++            "3": 18,
++            "4": 18,
++            "5": 19,
++            "6": 19,
++            "7": 20,
++            "8": 20
++          }
++        },
++        "8": {
++          "tcvrId": 8,
++          "accessControl": {
++            "controllerId": "8",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_8/xcvr_reset_8",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_8/xcvr_present_8",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "8",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_8"
++          },
++          "tcvrLaneToLedId": {
++            "1": 21,
++            "2": 21,
++            "3": 22,
++            "4": 22,
++            "5": 23,
++            "6": 23,
++            "7": 24,
++            "8": 24
++          }
++        },
++        "9": {
++          "tcvrId": 9,
++          "accessControl": {
++            "controllerId": "9",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_9/xcvr_reset_9",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_9/xcvr_present_9",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "9",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_9"
++          },
++          "tcvrLaneToLedId": {
++            "1": 25,
++            "2": 25,
++            "3": 25,
++            "4": 25,
++            "5": 26,
++            "6": 26,
++            "7": 26,
++            "8": 26
++          }
++        },
++        "10": {
++          "tcvrId": 10,
++          "accessControl": {
++            "controllerId": "10",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_10/xcvr_reset_10",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_10/xcvr_present_10",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "10",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_10"
++          },
++          "tcvrLaneToLedId": {
++            "1": 27,
++            "2": 27,
++            "3": 27,
++            "4": 27,
++            "5": 28,
++            "6": 28,
++            "7": 28,
++            "8": 28
++          }
++        },
++        "11": {
++          "tcvrId": 11,
++          "accessControl": {
++            "controllerId": "11",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_11/xcvr_reset_11",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_11/xcvr_present_11",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "11",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_11"
++          },
++          "tcvrLaneToLedId": {
++            "1": 29,
++            "2": 29,
++            "3": 30,
++            "4": 30,
++            "5": 31,
++            "6": 31,
++            "7": 32,
++            "8": 32
++          }
++        },
++        "12": {
++          "tcvrId": 12,
++          "accessControl": {
++            "controllerId": "12",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_12/xcvr_reset_12",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_12/xcvr_present_12",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "12",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_12"
++          },
++          "tcvrLaneToLedId": {
++            "1": 33,
++            "2": 33,
++            "3": 34,
++            "4": 34,
++            "5": 35,
++            "6": 35,
++            "7": 36,
++            "8": 36
++          }
++        },
++        "13": {
++          "tcvrId": 13,
++          "accessControl": {
++            "controllerId": "13",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_13/xcvr_reset_13",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_13/xcvr_present_13",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "13",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_13"
++          },
++          "tcvrLaneToLedId": {
++            "1": 37,
++            "2": 37,
++            "3": 37,
++            "4": 37,
++            "5": 38,
++            "6": 38,
++            "7": 38,
++            "8": 38
++          }
++        },
++        "14": {
++          "tcvrId": 14,
++          "accessControl": {
++            "controllerId": "14",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_14/xcvr_reset_14",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_14/xcvr_present_14",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "14",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_14"
++          },
++          "tcvrLaneToLedId": {
++            "1": 39,
++            "2": 39,
++            "3": 39,
++            "4": 39,
++            "5": 40,
++            "6": 40,
++            "7": 40,
++            "8": 40
++          }
++        },
++        "15": {
++          "tcvrId": 15,
++          "accessControl": {
++            "controllerId": "15",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_15/xcvr_reset_15",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_15/xcvr_present_15",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "15",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_15"
++          },
++          "tcvrLaneToLedId": {
++            "1": 41,
++            "2": 41,
++            "3": 42,
++            "4": 42,
++            "5": 43,
++            "6": 43,
++            "7": 44,
++            "8": 44
++          }
++        },
++        "16": {
++          "tcvrId": 16,
++          "accessControl": {
++            "controllerId": "16",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_16/xcvr_reset_16",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_16/xcvr_present_16",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "16",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_16"
++          },
++          "tcvrLaneToLedId": {
++            "1": 45,
++            "2": 45,
++            "3": 46,
++            "4": 46,
++            "5": 47,
++            "6": 47,
++            "7": 48,
++            "8": 48
++          }
++        },
++        "17": {
++          "tcvrId": 17,
++          "accessControl": {
++            "controllerId": "17",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_17/xcvr_reset_17",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_17/xcvr_present_17",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "17",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_17"
++          },
++          "tcvrLaneToLedId": {
++            "1": 49,
++            "2": 49,
++            "3": 49,
++            "4": 49,
++            "5": 50,
++            "6": 50,
++            "7": 50,
++            "8": 50
++          }
++        },
++        "18": {
++          "tcvrId": 18,
++          "accessControl": {
++            "controllerId": "18",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_18/xcvr_reset_18",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_18/xcvr_present_18",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "18",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_18"
++          },
++          "tcvrLaneToLedId": {
++            "1": 51,
++            "2": 51,
++            "3": 51,
++            "4": 51,
++            "5": 52,
++            "6": 52,
++            "7": 52,
++            "8": 52
++          }
++        },
++        "19": {
++          "tcvrId": 19,
++          "accessControl": {
++            "controllerId": "19",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_19/xcvr_reset_19",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_19/xcvr_present_19",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "19",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_19"
++          },
++          "tcvrLaneToLedId": {
++            "1": 53,
++            "2": 53,
++            "3": 54,
++            "4": 54,
++            "5": 55,
++            "6": 55,
++            "7": 56,
++            "8": 56
++          }
++        },
++        "20": {
++          "tcvrId": 20,
++          "accessControl": {
++            "controllerId": "20",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_20/xcvr_reset_20",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_20/xcvr_present_20",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "20",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_20"
++          },
++          "tcvrLaneToLedId": {
++            "1": 57,
++            "2": 57,
++            "3": 58,
++            "4": 58,
++            "5": 59,
++            "6": 59,
++            "7": 60,
++            "8": 60
++          }
++        },
++        "21": {
++          "tcvrId": 21,
++          "accessControl": {
++            "controllerId": "21",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_21/xcvr_reset_21",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_21/xcvr_present_21",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "21",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_21"
++          },
++          "tcvrLaneToLedId": {
++            "1": 61,
++            "2": 61,
++            "3": 61,
++            "4": 61,
++            "5": 62,
++            "6": 62,
++            "7": 62,
++            "8": 62
++          }
++        },
++        "22": {
++          "tcvrId": 22,
++          "accessControl": {
++            "controllerId": "22",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_22/xcvr_reset_22",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_22/xcvr_present_22",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "22",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_22"
++          },
++          "tcvrLaneToLedId": {
++            "1": 63,
++            "2": 63,
++            "3": 63,
++            "4": 63,
++            "5": 64,
++            "6": 64,
++            "7": 64,
++            "8": 64
++          }
++        },
++        "23": {
++          "tcvrId": 23,
++          "accessControl": {
++            "controllerId": "23",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_23/xcvr_reset_23",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_23/xcvr_present_23",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "23",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_23"
++          },
++          "tcvrLaneToLedId": {
++            "1": 65,
++            "2": 65,
++            "3": 66,
++            "4": 66,
++            "5": 67,
++            "6": 67,
++            "7": 68,
++            "8": 68
++          }
++        },
++        "24": {
++          "tcvrId": 24,
++          "accessControl": {
++            "controllerId": "24",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_24/xcvr_reset_24",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_24/xcvr_present_24",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "24",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_24"
++          },
++          "tcvrLaneToLedId": {
++            "1": 69,
++            "2": 69,
++            "3": 70,
++            "4": 70,
++            "5": 71,
++            "6": 71,
++            "7": 72,
++            "8": 72
++          }
++        },
++        "25": {
++          "tcvrId": 25,
++          "accessControl": {
++            "controllerId": "25",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_25/xcvr_reset_25",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_25/xcvr_present_25",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "25",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_25"
++          },
++          "tcvrLaneToLedId": {
++            "1": 73,
++            "2": 73,
++            "3": 73,
++            "4": 73,
++            "5": 74,
++            "6": 74,
++            "7": 74,
++            "8": 74
++          }
++        },
++        "26": {
++          "tcvrId": 26,
++          "accessControl": {
++            "controllerId": "26",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_26/xcvr_reset_26",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_26/xcvr_present_26",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "26",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_26"
++          },
++          "tcvrLaneToLedId": {
++            "1": 75,
++            "2": 75,
++            "3": 75,
++            "4": 75,
++            "5": 76,
++            "6": 76,
++            "7": 76,
++            "8": 76
++          }
++        },
++        "27": {
++          "tcvrId": 27,
++          "accessControl": {
++            "controllerId": "27",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_27/xcvr_reset_27",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_27/xcvr_present_27",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "27",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_27"
++          },
++          "tcvrLaneToLedId": {
++            "1": 77,
++            "2": 77,
++            "3": 78,
++            "4": 78,
++            "5": 79,
++            "6": 79,
++            "7": 80,
++            "8": 80
++          }
++        },
++        "28": {
++          "tcvrId": 28,
++          "accessControl": {
++            "controllerId": "28",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_28/xcvr_reset_28",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_28/xcvr_present_28",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "28",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_28"
++          },
++          "tcvrLaneToLedId": {
++            "1": 81,
++            "2": 81,
++            "3": 82,
++            "4": 82,
++            "5": 83,
++            "6": 83,
++            "7": 84,
++            "8": 84
++          }
++        },
++        "29": {
++          "tcvrId": 29,
++          "accessControl": {
++            "controllerId": "29",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_29/xcvr_reset_29",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_29/xcvr_present_29",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "29",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_29"
++          },
++          "tcvrLaneToLedId": {
++            "1": 85,
++            "2": 85,
++            "3": 85,
++            "4": 85,
++            "5": 86,
++            "6": 86,
++            "7": 86,
++            "8": 86
++          }
++        },
++        "30": {
++          "tcvrId": 30,
++          "accessControl": {
++            "controllerId": "30",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_30/xcvr_reset_30",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_30/xcvr_present_30",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "30",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_30"
++          },
++          "tcvrLaneToLedId": {
++            "1": 87,
++            "2": 87,
++            "3": 87,
++            "4": 87,
++            "5": 88,
++            "6": 88,
++            "7": 88,
++            "8": 88
++          }
++        },
++        "31": {
++          "tcvrId": 31,
++          "accessControl": {
++            "controllerId": "31",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_31/xcvr_reset_31",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_31/xcvr_present_31",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "31",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_31"
++          },
++          "tcvrLaneToLedId": {
++            "1": 89,
++            "2": 89,
++            "3": 90,
++            "4": 90,
++            "5": 91,
++            "6": 91,
++            "7": 92,
++            "8": 92
++          }
++        },
++        "32": {
++          "tcvrId": 32,
++          "accessControl": {
++            "controllerId": "32",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_32/xcvr_reset_32",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_32/xcvr_present_32",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "32",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_32"
++          },
++          "tcvrLaneToLedId": {
++            "1": 93,
++            "2": 93,
++            "3": 94,
++            "4": 94,
++            "5": 95,
++            "6": 95,
++            "7": 96,
++            "8": 96
++          }
++        },
++        "33": {
++          "tcvrId": 33,
++          "accessControl": {
++            "controllerId": "33",
++            "type": 1,
++            "reset": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_33/xcvr_reset_33",
++              "mask": 1,
++              "gpioOffset": 0,
++              "resetHoldHi": 1
++            },
++            "presence": {
++              "sysfsPath": "/run/devmap/xcvrs/xcvr_ctrl_33/xcvr_present_33",
++              "mask": 1,
++              "gpioOffset": 0,
++              "presentHoldHi": 0
++            },
++            "gpioChip": ""
++          },
++          "io": {
++            "controllerId": "33",
++            "type": 1,
++            "devicePath": "/run/devmap/xcvrs/xcvr_io_33"
++          },
++          "tcvrLaneToLedId": {
++            "1": 97,
++            "2": 97,
++            "3": 97,
++            "4": 97
++          }
++        }
++      },
++      "phyMapping": {},
++      "phyIOControllers": {},
++      "ledMapping": {
++        "1": {
++          "id": 1,
++          "bluePath": "/sys/class/leds/port1_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port1_led1:amber:status",
++          "transceiverId": 1
++        },
++        "2": {
++          "id": 2,
++          "bluePath": "/sys/class/leds/port1_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port1_led2:amber:status",
++          "transceiverId": 1
++        },
++        "3": {
++          "id": 3,
++          "bluePath": "/sys/class/leds/port2_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port2_led1:amber:status",
++          "transceiverId": 2
++        },
++        "4": {
++          "id": 4,
++          "bluePath": "/sys/class/leds/port2_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port2_led2:amber:status",
++          "transceiverId": 2
++        },
++        "5": {
++          "id": 5,
++          "bluePath": "/sys/class/leds/port3_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port3_led1:amber:status",
++          "transceiverId": 3
++        },
++        "6": {
++          "id": 6,
++          "bluePath": "/sys/class/leds/port3_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port3_led2:amber:status",
++          "transceiverId": 3
++        },
++        "7": {
++          "id": 7,
++          "bluePath": "/sys/class/leds/port3_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port3_led3:amber:status",
++          "transceiverId": 3
++        },
++        "8": {
++          "id": 8,
++          "bluePath": "/sys/class/leds/port3_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port3_led4:amber:status",
++          "transceiverId": 3
++        },
++        "9": {
++          "id": 9,
++          "bluePath": "/sys/class/leds/port4_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port4_led1:amber:status",
++          "transceiverId": 4
++        },
++        "10": {
++          "id": 10,
++          "bluePath": "/sys/class/leds/port4_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port4_led2:amber:status",
++          "transceiverId": 4
++        },
++        "11": {
++          "id": 11,
++          "bluePath": "/sys/class/leds/port4_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port4_led3:amber:status",
++          "transceiverId": 4
++        },
++        "12": {
++          "id": 12,
++          "bluePath": "/sys/class/leds/port4_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port4_led4:amber:status",
++          "transceiverId": 4
++        },
++        "13": {
++          "id": 13,
++          "bluePath": "/sys/class/leds/port5_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port5_led1:amber:status",
++          "transceiverId": 5
++        },
++        "14": {
++          "id": 14,
++          "bluePath": "/sys/class/leds/port5_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port5_led2:amber:status",
++          "transceiverId": 5
++        },
++        "15": {
++          "id": 15,
++          "bluePath": "/sys/class/leds/port6_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port6_led1:amber:status",
++          "transceiverId": 6
++        },
++        "16": {
++          "id": 16,
++          "bluePath": "/sys/class/leds/port6_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port6_led2:amber:status",
++          "transceiverId": 6
++        },
++        "17": {
++          "id": 17,
++          "bluePath": "/sys/class/leds/port7_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port7_led1:amber:status",
++          "transceiverId": 7
++        },
++        "18": {
++          "id": 18,
++          "bluePath": "/sys/class/leds/port7_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port7_led2:amber:status",
++          "transceiverId": 7
++        },
++        "19": {
++          "id": 19,
++          "bluePath": "/sys/class/leds/port7_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port7_led3:amber:status",
++          "transceiverId": 7
++        },
++        "20": {
++          "id": 20,
++          "bluePath": "/sys/class/leds/port7_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port7_led4:amber:status",
++          "transceiverId": 7
++        },
++        "21": {
++          "id": 21,
++          "bluePath": "/sys/class/leds/port8_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port8_led1:amber:status",
++          "transceiverId": 8
++        },
++        "22": {
++          "id": 22,
++          "bluePath": "/sys/class/leds/port8_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port8_led2:amber:status",
++          "transceiverId": 8
++        },
++        "23": {
++          "id": 23,
++          "bluePath": "/sys/class/leds/port8_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port8_led3:amber:status",
++          "transceiverId": 8
++        },
++        "24": {
++          "id": 24,
++          "bluePath": "/sys/class/leds/port8_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port8_led4:amber:status",
++          "transceiverId": 8
++        },
++        "25": {
++          "id": 25,
++          "bluePath": "/sys/class/leds/port9_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port9_led1:amber:status",
++          "transceiverId": 9
++        },
++        "26": {
++          "id": 26,
++          "bluePath": "/sys/class/leds/port9_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port9_led2:amber:status",
++          "transceiverId": 9
++        },
++        "27": {
++          "id": 27,
++          "bluePath": "/sys/class/leds/port10_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port10_led1:amber:status",
++          "transceiverId": 10
++        },
++        "28": {
++          "id": 28,
++          "bluePath": "/sys/class/leds/port10_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port10_led2:amber:status",
++          "transceiverId": 10
++        },
++        "29": {
++          "id": 29,
++          "bluePath": "/sys/class/leds/port11_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port11_led1:amber:status",
++          "transceiverId": 11
++        },
++        "30": {
++          "id": 30,
++          "bluePath": "/sys/class/leds/port11_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port11_led2:amber:status",
++          "transceiverId": 11
++        },
++        "31": {
++          "id": 31,
++          "bluePath": "/sys/class/leds/port11_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port11_led3:amber:status",
++          "transceiverId": 11
++        },
++        "32": {
++          "id": 32,
++          "bluePath": "/sys/class/leds/port11_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port11_led4:amber:status",
++          "transceiverId": 11
++        },
++        "33": {
++          "id": 33,
++          "bluePath": "/sys/class/leds/port12_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port12_led1:amber:status",
++          "transceiverId": 12
++        },
++        "34": {
++          "id": 34,
++          "bluePath": "/sys/class/leds/port12_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port12_led2:amber:status",
++          "transceiverId": 12
++        },
++        "35": {
++          "id": 35,
++          "bluePath": "/sys/class/leds/port12_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port12_led3:amber:status",
++          "transceiverId": 12
++        },
++        "36": {
++          "id": 36,
++          "bluePath": "/sys/class/leds/port12_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port12_led4:amber:status",
++          "transceiverId": 12
++        },
++        "37": {
++          "id": 37,
++          "bluePath": "/sys/class/leds/port13_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port13_led1:amber:status",
++          "transceiverId": 13
++        },
++        "38": {
++          "id": 38,
++          "bluePath": "/sys/class/leds/port13_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port13_led2:amber:status",
++          "transceiverId": 13
++        },
++        "39": {
++          "id": 39,
++          "bluePath": "/sys/class/leds/port14_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port14_led1:amber:status",
++          "transceiverId": 14
++        },
++        "40": {
++          "id": 40,
++          "bluePath": "/sys/class/leds/port14_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port14_led2:amber:status",
++          "transceiverId": 14
++        },
++        "41": {
++          "id": 41,
++          "bluePath": "/sys/class/leds/port15_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port15_led1:amber:status",
++          "transceiverId": 15
++        },
++        "42": {
++          "id": 42,
++          "bluePath": "/sys/class/leds/port15_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port15_led2:amber:status",
++          "transceiverId": 15
++        },
++        "43": {
++          "id": 43,
++          "bluePath": "/sys/class/leds/port15_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port15_led3:amber:status",
++          "transceiverId": 15
++        },
++        "44": {
++          "id": 44,
++          "bluePath": "/sys/class/leds/port15_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port15_led4:amber:status",
++          "transceiverId": 15
++        },
++        "45": {
++          "id": 45,
++          "bluePath": "/sys/class/leds/port16_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port16_led1:amber:status",
++          "transceiverId": 16
++        },
++        "46": {
++          "id": 46,
++          "bluePath": "/sys/class/leds/port16_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port16_led2:amber:status",
++          "transceiverId": 16
++        },
++        "47": {
++          "id": 47,
++          "bluePath": "/sys/class/leds/port16_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port16_led3:amber:status",
++          "transceiverId": 16
++        },
++        "48": {
++          "id": 48,
++          "bluePath": "/sys/class/leds/port16_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port16_led4:amber:status",
++          "transceiverId": 16
++        },
++        "49": {
++          "id": 49,
++          "bluePath": "/sys/class/leds/port17_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port17_led1:amber:status",
++          "transceiverId": 17
++        },
++        "50": {
++          "id": 50,
++          "bluePath": "/sys/class/leds/port17_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port17_led2:amber:status",
++          "transceiverId": 17
++        },
++        "51": {
++          "id": 51,
++          "bluePath": "/sys/class/leds/port18_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port18_led1:amber:status",
++          "transceiverId": 18
++        },
++        "52": {
++          "id": 52,
++          "bluePath": "/sys/class/leds/port18_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port18_led2:amber:status",
++          "transceiverId": 18
++        },
++        "53": {
++          "id": 53,
++          "bluePath": "/sys/class/leds/port19_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port19_led1:amber:status",
++          "transceiverId": 19
++        },
++        "54": {
++          "id": 54,
++          "bluePath": "/sys/class/leds/port19_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port19_led2:amber:status",
++          "transceiverId": 19
++        },
++        "55": {
++          "id": 55,
++          "bluePath": "/sys/class/leds/port19_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port19_led3:amber:status",
++          "transceiverId": 19
++        },
++        "56": {
++          "id": 56,
++          "bluePath": "/sys/class/leds/port19_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port19_led4:amber:status",
++          "transceiverId": 19
++        },
++        "57": {
++          "id": 57,
++          "bluePath": "/sys/class/leds/port20_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port20_led1:amber:status",
++          "transceiverId": 20
++        },
++        "58": {
++          "id": 58,
++          "bluePath": "/sys/class/leds/port20_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port20_led2:amber:status",
++          "transceiverId": 20
++        },
++        "59": {
++          "id": 59,
++          "bluePath": "/sys/class/leds/port20_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port20_led3:amber:status",
++          "transceiverId": 20
++        },
++        "60": {
++          "id": 60,
++          "bluePath": "/sys/class/leds/port20_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port20_led4:amber:status",
++          "transceiverId": 20
++        },
++        "61": {
++          "id": 61,
++          "bluePath": "/sys/class/leds/port21_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port21_led1:amber:status",
++          "transceiverId": 21
++        },
++        "62": {
++          "id": 62,
++          "bluePath": "/sys/class/leds/port21_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port21_led2:amber:status",
++          "transceiverId": 21
++        },
++        "63": {
++          "id": 63,
++          "bluePath": "/sys/class/leds/port22_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port22_led1:amber:status",
++          "transceiverId": 22
++        },
++        "64": {
++          "id": 64,
++          "bluePath": "/sys/class/leds/port22_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port22_led2:amber:status",
++          "transceiverId": 22
++        },
++        "65": {
++          "id": 65,
++          "bluePath": "/sys/class/leds/port23_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port23_led1:amber:status",
++          "transceiverId": 23
++        },
++        "66": {
++          "id": 66,
++          "bluePath": "/sys/class/leds/port23_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port23_led2:amber:status",
++          "transceiverId": 23
++        },
++        "67": {
++          "id": 67,
++          "bluePath": "/sys/class/leds/port23_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port23_led1:amber:status",
++          "transceiverId": 23
++        },
++        "68": {
++          "id": 68,
++          "bluePath": "/sys/class/leds/port23_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port23_led2:amber:status",
++          "transceiverId": 23
++        },
++        "69": {
++          "id": 69,
++          "bluePath": "/sys/class/leds/port24_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port24_led1:amber:status",
++          "transceiverId": 24
++        },
++        "70": {
++          "id": 70,
++          "bluePath": "/sys/class/leds/port24_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port24_led2:amber:status",
++          "transceiverId": 24
++        },
++        "71": {
++          "id": 71,
++          "bluePath": "/sys/class/leds/port24_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port24_led3:amber:status",
++          "transceiverId": 24
++        },
++        "72": {
++          "id": 72,
++          "bluePath": "/sys/class/leds/port24_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port24_led4:amber:status",
++          "transceiverId": 24
++        },
++        "73": {
++          "id": 73,
++          "bluePath": "/sys/class/leds/port25_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port25_led1:amber:status",
++          "transceiverId": 25
++        },
++        "74": {
++          "id": 74,
++          "bluePath": "/sys/class/leds/port25_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port25_led2:amber:status",
++          "transceiverId": 25
++        },
++        "75": {
++          "id": 75,
++          "bluePath": "/sys/class/leds/port26_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port26_led1:amber:status",
++          "transceiverId": 26
++        },
++        "76": {
++          "id": 76,
++          "bluePath": "/sys/class/leds/port26_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port26_led2:amber:status",
++          "transceiverId": 26
++        },
++        "77": {
++          "id": 77,
++          "bluePath": "/sys/class/leds/port27_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port27_led1:amber:status",
++          "transceiverId": 27
++        },
++        "78": {
++          "id": 78,
++          "bluePath": "/sys/class/leds/port27_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port27_led2:amber:status",
++          "transceiverId": 27
++        },
++        "79": {
++          "id": 79,
++          "bluePath": "/sys/class/leds/port27_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port27_led3:amber:status",
++          "transceiverId": 27
++        },
++        "80": {
++          "id": 80,
++          "bluePath": "/sys/class/leds/port27_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port27_led4:amber:status",
++          "transceiverId": 27
++        },
++        "81": {
++          "id": 81,
++          "bluePath": "/sys/class/leds/port28_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port28_led1:amber:status",
++          "transceiverId": 28
++        },
++        "82": {
++          "id": 82,
++          "bluePath": "/sys/class/leds/port28_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port28_led2:amber:status",
++          "transceiverId": 28
++        },
++        "83": {
++          "id": 83,
++          "bluePath": "/sys/class/leds/port28_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port28_led3:amber:status",
++          "transceiverId": 28
++        },
++        "84": {
++          "id": 84,
++          "bluePath": "/sys/class/leds/port28_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port28_led4:amber:status",
++          "transceiverId": 28
++        },
++        "85": {
++          "id": 85,
++          "bluePath": "/sys/class/leds/port29_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port29_led1:amber:status",
++          "transceiverId": 29
++        },
++        "86": {
++          "id": 86,
++          "bluePath": "/sys/class/leds/port29_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port29_led2:amber:status",
++          "transceiverId": 29
++        },
++        "87": {
++          "id": 87,
++          "bluePath": "/sys/class/leds/port30_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port30_led1:amber:status",
++          "transceiverId": 30
++        },
++        "88": {
++          "id": 88,
++          "bluePath": "/sys/class/leds/port30_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port30_led2:amber:status",
++          "transceiverId": 30
++        },
++        "89": {
++          "id": 89,
++          "bluePath": "/sys/class/leds/port31_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port31_led1:amber:status",
++          "transceiverId": 31
++        },
++        "90": {
++          "id": 90,
++          "bluePath": "/sys/class/leds/port31_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port31_led2:amber:status",
++          "transceiverId": 31
++        },
++        "91": {
++          "id": 91,
++          "bluePath": "/sys/class/leds/port31_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port31_led3:amber:status",
++          "transceiverId": 31
++        },
++        "92": {
++          "id": 92,
++          "bluePath": "/sys/class/leds/port31_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port31_led4:amber:status",
++          "transceiverId": 31
++        },
++        "93": {
++          "id": 93,
++          "bluePath": "/sys/class/leds/port32_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port32_led1:amber:status",
++          "transceiverId": 32
++        },
++        "94": {
++          "id": 94,
++          "bluePath": "/sys/class/leds/port32_led2:blue:status",
++          "yellowPath": "/sys/class/leds/port32_led2:amber:status",
++          "transceiverId": 32
++        },
++        "95": {
++          "id": 95,
++          "bluePath": "/sys/class/leds/port32_led3:blue:status",
++          "yellowPath": "/sys/class/leds/port32_led3:amber:status",
++          "transceiverId": 32
++        },
++        "96": {
++          "id": 96,
++          "bluePath": "/sys/class/leds/port32_led4:blue:status",
++          "yellowPath": "/sys/class/leds/port32_led4:amber:status",
++          "transceiverId": 32
++        },
++        "97": {
++          "id": 97,
++          "bluePath": "/sys/class/leds/port33_led1:blue:status",
++          "yellowPath": "/sys/class/leds/port33_led1:amber:status",
++          "transceiverId": 33
++        }
++      }
++    }
++  }
++}
++)";
++
++static BspPlatformMappingThrift buildWedge800CACTPlatformMapping(
++    const std::string& platformMappingStr) {
++  return apache::thrift::SimpleJSONSerializer::deserialize<
++      BspPlatformMappingThrift>(platformMappingStr);
++}
++
++} // namespace
++
++namespace facebook {
++namespace fboss {
++
++Wedge800CACTBspPlatformMapping::Wedge800CACTBspPlatformMapping()
++    : BspPlatformMapping(
++          buildWedge800CACTPlatformMapping(kJsonBspPlatformMappingStr)) {}
++
++Wedge800CACTBspPlatformMapping::Wedge800CACTBspPlatformMapping(
++    const std::string& platformMappingStr)
++    : BspPlatformMapping(buildWedge800CACTPlatformMapping(platformMappingStr)) {
++}
++
++} // namespace fboss
++} // namespace facebook
+diff --git a/fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.h b/fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.h
+new file mode 100644
+index 0000000000000..4921639580038
+--- /dev/null
++++ b/fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.h
+@@ -0,0 +1,18 @@
++// (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
++
++#pragma once
++
++#include "fboss/lib/bsp/BspPlatformMapping.h"
++
++namespace facebook {
++namespace fboss {
++
++class Wedge800CACTBspPlatformMapping : public BspPlatformMapping {
++ public:
++  Wedge800CACTBspPlatformMapping();
++  explicit Wedge800CACTBspPlatformMapping(
++      const std::string& platformMappingStr);
++};
++
++} // namespace fboss
++} // namespace facebook
+diff --git a/fboss/qsfp_service/platforms/wedge/WedgeManagerInit.cpp b/fboss/qsfp_service/platforms/wedge/WedgeManagerInit.cpp
+index 2ef07a49f4a82..c295d2ced1db6 100644
+--- a/fboss/qsfp_service/platforms/wedge/WedgeManagerInit.cpp
++++ b/fboss/qsfp_service/platforms/wedge/WedgeManagerInit.cpp
+@@ -24,6 +24,7 @@
+ #include "fboss/lib/bsp/morgan800cc/Morgan800ccBspPlatformMapping.h"
+ #include "fboss/lib/bsp/tahan800bc/Tahan800bcBspPlatformMapping.h"
+ #include "fboss/lib/bsp/tahansb800bc/Tahansb800bcBspPlatformMapping.h"
++#include "fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.h"
+ #include "fboss/lib/platforms/PlatformProductInfo.h"
+ #include "fboss/qsfp_service/PortManager.h"
+ #include "fboss/qsfp_service/platforms/wedge/BspWedgeManager.h"
+@@ -160,6 +161,10 @@ std::unique_ptr<WedgeManager> createWedgeManager(
+       return createBspWedgeManager<
+           Tahansb800bcBspPlatformMapping,
+           PlatformType::PLATFORM_TAHANSB800BC>(platformMapping, threads);
++    case PlatformType::PLATFORM_WEDGE800CACT:
++      return createBspWedgeManager<
++          Wedge800CACTBspPlatformMapping,
++          PlatformType::PLATFORM_WEDGE800CACT>(platformMapping, threads);
+     default:
+       return std::make_unique<Wedge40Manager>(platformMapping, threads);
+   }
+diff --git a/fboss/qsfp_service/test/BUCK b/fboss/qsfp_service/test/BUCK
+index 570046066fada..6bf4ceea0df6d 100644
+--- a/fboss/qsfp_service/test/BUCK
++++ b/fboss/qsfp_service/test/BUCK
+@@ -80,6 +80,7 @@ cpp_unittest(
+         "//fboss/lib/bsp/minipack3n:minipack3n_bsp",
+         "//fboss/lib/bsp/montblanc:montblanc_bsp",
+         "//fboss/lib/bsp/tahansb800bc:tahansb800bc_bsp",
++        "//fboss/lib/bsp/wedge800cact:wedge800cact_bsp",
+         "//folly/testing:test_util",
+     ],
+ )
+diff --git a/fboss/qsfp_service/test/BspPlatformMapTest.cpp b/fboss/qsfp_service/test/BspPlatformMapTest.cpp
+index 199a76780c149..af9887e6c8f07 100644
+--- a/fboss/qsfp_service/test/BspPlatformMapTest.cpp
++++ b/fboss/qsfp_service/test/BspPlatformMapTest.cpp
+@@ -10,6 +10,7 @@
+ #include "fboss/lib/bsp/minipack3n/Minipack3NBspPlatformMapping.h"
+ #include "fboss/lib/bsp/montblanc/MontblancBspPlatformMapping.h"
+ #include "fboss/lib/bsp/tahansb800bc/Tahansb800bcBspPlatformMapping.h"
++#include "fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.h"
+ 
+ namespace facebook::fboss {
+ 
+@@ -50,6 +51,10 @@ TEST_F(BspPlatformMapTest, checkNumPimTransceivers) {
+   auto tahansb800bcBspPlatformMap = Tahansb800bcBspPlatformMapping();
+   EXPECT_EQ(tahansb800bcBspPlatformMap.numPims(), 1);
+   EXPECT_EQ(tahansb800bcBspPlatformMap.numTransceivers(), 9);
++  // Check WEDGE800CACT
++  auto wedge800cactBspPlatformMap = Wedge800CACTBspPlatformMapping();
++  EXPECT_EQ(wedge800cactBspPlatformMap.numPims(), 1);
++  EXPECT_EQ(wedge800cactBspPlatformMap.numTransceivers(), 33);
+ }
+ 
+ } // namespace facebook::fboss
+diff --git a/fboss/util/BUCK b/fboss/util/BUCK
+index ebe3570ce5f23..17b2c8b4a2576 100644
+--- a/fboss/util/BUCK
++++ b/fboss/util/BUCK
+@@ -89,6 +89,7 @@ cpp_library(
+         "//fboss/lib/bsp/morgan800cc:morgan800cc_bsp",
+         "//fboss/lib/bsp/tahan800bc:tahan800bc_bsp",
+         "//fboss/lib/bsp/tahansb800bc:tahansb800bc_bsp",
++        "//fboss/lib/bsp/wedge800cact:wedge800cact_bsp",
+         "//fboss/lib/firmware_storage:firmware_storage",
+         "//fboss/lib/fpga:wedge400_i2c",
+         "//fboss/lib/fpga/facebook/darwin:darwin_i2c",
+diff --git a/fboss/util/wedge_qsfp_util.cpp b/fboss/util/wedge_qsfp_util.cpp
+index 85bcc694be97c..202db3a04bd42 100644
+--- a/fboss/util/wedge_qsfp_util.cpp
++++ b/fboss/util/wedge_qsfp_util.cpp
+@@ -56,6 +56,7 @@
+ #include "fboss/lib/bsp/morgan800cc/Morgan800ccBspPlatformMapping.h"
+ #include "fboss/lib/bsp/tahan800bc/Tahan800bcBspPlatformMapping.h"
+ #include "fboss/lib/bsp/tahansb800bc/Tahansb800bcBspPlatformMapping.h"
++#include "fboss/lib/bsp/wedge800cact/Wedge800CACTBspPlatformMapping.h"
+ #include "fboss/lib/fpga/Wedge400I2CBus.h"
+ #include "fboss/lib/fpga/Wedge400TransceiverApi.h"
+ #include "fboss/lib/platforms/PlatformProductInfo.h"
+@@ -4420,6 +4421,12 @@ std::pair<std::unique_ptr<TransceiverI2CApi>, int> getTransceiverAPI() {
+                                  .get();
+       auto ioBus = std::make_unique<BspIOBus>(systemContainer);
+       return std::make_pair(std::move(ioBus), 0);
++    } else if (FLAGS_platform == "wedge800cact") {
++      auto systemContainer = BspGenericSystemContainer<
++                                 Wedge800CACTBspPlatformMapping>::getInstance()
++                                 .get();
++      auto ioBus = std::make_unique<BspIOBus>(systemContainer);
++      return std::make_pair(std::move(ioBus), 0);
+     } else {
+       return getTransceiverIOBusFromPlatform(FLAGS_platform);
+     }
+@@ -4515,6 +4522,12 @@ std::pair<std::unique_ptr<TransceiverI2CApi>, int> getTransceiverAPI() {
+             .get();
+     auto ioBus = std::make_unique<BspIOBus>(systemContainer);
+     return std::make_pair(std::move(ioBus), 0);
++  } else if (mode == PlatformType::PLATFORM_WEDGE800CACT) {
++    auto systemContainer =
++        BspGenericSystemContainer<Wedge800CACTBspPlatformMapping>::getInstance()
++            .get();
++    auto ioBus = std::make_unique<BspIOBus>(systemContainer);
++    return std::make_pair(std::move(ioBus), 0);
+   }
+ 
+   return getTransceiverIOBusFromMode(mode);
+@@ -4555,6 +4568,8 @@ getTransceiverPlatformAPI(TransceiverI2CApi* i2cBus) {
+       mode = PlatformType::PLATFORM_MONTBLANC;
+     } else if (FLAGS_platform == "minipack3n") {
+       mode = PlatformType::PLATFORM_MINIPACK3N;
++    } else if (FLAGS_platform == "wedge800cact") {
++      mode = PlatformType::PLATFORM_WEDGE800CACT;
+     } else if (FLAGS_platform == "meru800bia") {
+       mode = PlatformType::PLATFORM_MERU800BIA;
+     } else if (FLAGS_platform == "meru800bfa") {
