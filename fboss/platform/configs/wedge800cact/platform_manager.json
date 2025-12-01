@@ -1,5 +1,5 @@
 {
-  "platformName": "WEDGE800BACT",
+  "platformName": "WEDGE800CACT",
   "rootPmUnitName": "MCB",
   "rootSlotType": "MCB_SLOT",
   "slotTypeConfigs": {
@@ -1167,9 +1167,15 @@
       "i2cDeviceConfigs": [
         {
           "busName": "INCOMING@0",
-          "address": "0x76",
+          "address": "0x60",
           "kernelDeviceName": "pmbus",
-          "pmUnitScopedName": "SMB_VRM"
+          "pmUnitScopedName": "SMB_VRM1"
+        },
+        {
+          "busName": "INCOMING@0",
+          "address": "0x62",
+          "kernelDeviceName": "pmbus",
+          "pmUnitScopedName": "SMB_VRM2"
         },
         {
           "busName": "INCOMING@1",
@@ -1214,18 +1220,18 @@
         {
           "busName": "INCOMING@3",
           "address": "0x33",
-          "kernelDeviceName": "w800b_smbcpld",
+          "kernelDeviceName": "w800c_smbcpld",
           "pmUnitScopedName": "SMB_CPLD"
         },
         {
           "busName": "INCOMING@4",
-          "address": "0x6a",
-          "kernelDeviceName": "xdpe15284",
+          "address": "0x72",
+          "kernelDeviceName": "pmbus",
           "pmUnitScopedName": "SMB_VOLTAGE_MONITOR3"
         },
         {
           "busName": "INCOMING@5",
-          "address": "0x70",
+          "address": "0x76",
           "kernelDeviceName": "xdpe15284",
           "pmUnitScopedName": "SMB_VOLTAGE_MONITOR4"
         },
@@ -1243,13 +1249,13 @@
         },
         {
           "busName": "INCOMING@7",
-          "address": "0x70",
+          "address": "0x60",
           "kernelDeviceName": "xdpe15284",
           "pmUnitScopedName": "SMB_3V3_L_MONITOR"
         },
         {
           "busName": "INCOMING@8",
-          "address": "0x72",
+          "address": "0x62",
           "kernelDeviceName": "xdpe15284",
           "pmUnitScopedName": "SMB_3V3_R_MONITOR"
         },
@@ -1352,7 +1358,8 @@
     "/run/devmap/sensors/SMB_VOLTAGE_MONITOR2": "/SMB_SLOT@0/[SMB_VOLTAGE_MONITOR2]",
     "/run/devmap/sensors/SMB_VOLTAGE_MONITOR3": "/SMB_SLOT@0/[SMB_VOLTAGE_MONITOR3]",
     "/run/devmap/sensors/SMB_VOLTAGE_MONITOR4": "/SMB_SLOT@0/[SMB_VOLTAGE_MONITOR4]",
-    "/run/devmap/sensors/SMB_VRM": "/SMB_SLOT@0/[SMB_VRM]",
+    "/run/devmap/sensors/SMB_VRM1": "/SMB_SLOT@0/[SMB_VRM1]",
+    "/run/devmap/sensors/SMB_VRM2": "/SMB_SLOT@0/[SMB_VRM2]",
     "/run/devmap/sensors/SMB_3V3_R_MONITOR": "/SMB_SLOT@0/[SMB_3V3_R_MONITOR]",
     "/run/devmap/sensors/SMB_3V3_L_MONITOR": "/SMB_SLOT@0/[SMB_3V3_L_MONITOR]",
     "/run/devmap/sensors/SMB_CPLD": "/SMB_SLOT@0/[SMB_CPLD]",
