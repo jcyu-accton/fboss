@@ -388,6 +388,10 @@ def read_si_settings(
             tx_setting.ldoBypass = int(row[Column.TX_LDO_BYPASS])
         if "TX_FFE_COEFF_5" in column_names and row[Column.TX_FFE_COEFF_5]:
             tx_setting.ffeCoeff5 = int(row[Column.TX_FFE_COEFF_5])
+        for i in range(14):
+            custom_col_name = f"CUSTOM_TX_{i}"
+            if custom_col_name in column_names and row[getattr(Column, custom_col_name)]:
+                setattr(tx_setting, f"custom{i}", int(row[getattr(Column, custom_col_name)]))
 
         rx_setting = RxSettings()
         if "RX_CTLE_CODE" in column_names and row[Column.RX_CTLE_CODE]:
@@ -507,6 +511,10 @@ def read_si_settings(
             rx_setting.ffeLmsDynamicGatingEn = int(
                 row[Column.RX_FFE_LMS_DYNAMIC_GATING_EN]
             )
+        for i in range(49):
+            custom_col_name = f"CUSTOM_RX_{i}"
+            if custom_col_name in column_names and row[getattr(Column, custom_col_name)]:
+                setattr(rx_setting, f"custom{i}", int(row[getattr(Column, custom_col_name)]))
 
         si_settings.append(
             SiSettingRow(

@@ -154,6 +154,20 @@ struct TxSettings {
   29: optional i32 firPost1;
   30: optional i32 firPost2;
   31: optional i32 firPost3;
+  32: optional i32 custom0;
+  33: optional i32 custom1;
+  34: optional i32 custom2;
+  35: optional i32 custom3;
+  36: optional i32 custom4;
+  37: optional i32 custom5;
+  38: optional i32 custom6;
+  39: optional i32 custom7;
+  40: optional i32 custom8;
+  41: optional i32 custom9;
+  42: optional i32 custom10;
+  43: optional i32 custom11;
+  44: optional i32 custom12;
+  45: optional i32 custom13;
 }
 
 struct RxSettings {
@@ -198,6 +212,55 @@ struct RxSettings {
   39: optional i32 dcwStepFineOvVal;
   40: optional i32 dcwOvEn;
   41: optional i32 ffeLmsDynamicGatingEn;
+  42: optional i32 custom0;
+  43: optional i32 custom1;
+  44: optional i32 custom2;
+  45: optional i32 custom3;
+  46: optional i32 custom4;
+  47: optional i32 custom5;
+  48: optional i32 custom6;
+  49: optional i32 custom7;
+  50: optional i32 custom8;
+  51: optional i32 custom9;
+  52: optional i32 custom10;
+  53: optional i32 custom11;
+  54: optional i32 custom12;
+  55: optional i32 custom13;
+  56: optional i32 custom14;
+  57: optional i32 custom15;
+  58: optional i32 custom16;
+  59: optional i32 custom17;
+  60: optional i32 custom18;
+  61: optional i32 custom19;
+  62: optional i32 custom20;
+  63: optional i32 custom21;
+  64: optional i32 custom22;
+  65: optional i32 custom23;
+  66: optional i32 custom24;
+  67: optional i32 custom25;
+  68: optional i32 custom26;
+  69: optional i32 custom27;
+  70: optional i32 custom28;
+  71: optional i32 custom29;
+  72: optional i32 custom30;
+  73: optional i32 custom31;
+  74: optional i32 custom32;
+  75: optional i32 custom33;
+  76: optional i32 custom34;
+  77: optional i32 custom35;
+  78: optional i32 custom36;
+  79: optional i32 custom37;
+  80: optional i32 custom38;
+  81: optional i32 custom39;
+  82: optional i32 custom40;
+  83: optional i32 custom41;
+  84: optional i32 custom42;
+  85: optional i32 custom43;
+  86: optional i32 custom44;
+  87: optional i32 custom45;
+  88: optional i32 custom46;
+  89: optional i32 custom47;
+  90: optional i32 custom48;  
 }
 
 struct LaneMap {
