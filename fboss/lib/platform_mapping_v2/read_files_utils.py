@@ -389,7 +389,7 @@ def read_si_settings(
         if "TX_FFE_COEFF_5" in column_names and row[Column.TX_FFE_COEFF_5]:
             tx_setting.ffeCoeff5 = int(row[Column.TX_FFE_COEFF_5])
         for i in range(14):
-            custom_col_name = f"CUSTOM_TX_{i}"
+            custom_col_name = f"CUSTOM_TX_{i:02d}"
             if custom_col_name in column_names and row[getattr(Column, custom_col_name)]:
                 setattr(tx_setting, f"custom{i}", int(row[getattr(Column, custom_col_name)]))
 
@@ -512,7 +512,7 @@ def read_si_settings(
                 row[Column.RX_FFE_LMS_DYNAMIC_GATING_EN]
             )
         for i in range(49):
-            custom_col_name = f"CUSTOM_RX_{i}"
+            custom_col_name = f"CUSTOM_RX_{i:02d}"
             if custom_col_name in column_names and row[getattr(Column, custom_col_name)]:
                 setattr(rx_setting, f"custom{i}", int(row[getattr(Column, custom_col_name)]))
 
