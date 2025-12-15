@@ -260,7 +260,7 @@ struct RxSettings {
   87: optional i32 custom45;
   88: optional i32 custom46;
   89: optional i32 custom47;
-  90: optional i32 custom48;  
+  90: optional i32 custom48;
 }
 
 struct LaneMap {
